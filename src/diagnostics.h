@@ -1,4 +1,4 @@
-// The Orb OS — measurements for the serial log and /health. See orb_stats.cpp.
+// The Orb OS — measurements for the serial log and /health. See diagnostics.cpp.
 #pragma once
 #include <stdint.h>
 

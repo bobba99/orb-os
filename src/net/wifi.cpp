@@ -7,10 +7,10 @@
 #include <ESPmDNS.h>
 #include <esp_wifi.h>
 #include "config.h"
-#include "orb_state.h"
-#include "orb_wifi.h"
-#include "orb_location.h"
-#include "orb_stats.h"
+#include "shared_state.h"
+#include "net/wifi.h"
+#include "location.h"
+#include "diagnostics.h"
 #if ORB_OTA_ENABLED
 #include <ArduinoOTA.h>
 #endif

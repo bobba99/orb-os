@@ -7,8 +7,8 @@
 #include <string>
 #include "config.h"
 #include "geo.h"
-#include "orb_state.h"
-#include "orb_apps.h"
+#include "shared_state.h"
+#include "app_hooks.h"
 #include "radar_view.h"
 #include "ui.h"
 #include "audio.h"

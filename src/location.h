@@ -1,4 +1,4 @@
-// The Orb OS — where the Orb is. See orb_location.cpp.
+// The Orb OS — where the Orb is. See location.cpp.
 #pragma once
 
 void host_locate_if_unset();   // one IP lookup per boot for a never-located device; no restart

@@ -1,7 +1,7 @@
-// The Orb OS — settings in NVS. See orb_storage.cpp.
+// The Orb OS — settings in NVS. See storage.cpp.
 //
 // The host_* setters Settings calls (brightness, idle, sound, chime, factory reset) are
-// defined in orb_storage.cpp too; settings_view.cpp declares them itself, as it always has.
+// defined in storage.cpp too; settings_view.cpp declares them itself, as it always has.
 #pragma once
 
 void loadSettings();                 // NVS -> globals; runs first in setup()

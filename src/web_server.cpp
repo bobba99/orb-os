@@ -10,10 +10,10 @@
 #include <esp_heap_caps.h>
 #include <nvs.h>
 #include "config.h"
-#include "orb_state.h"
-#include "orb_web.h"
-#include "orb_apps.h"
-#include "orb_stats.h"
+#include "shared_state.h"
+#include "web_server.h"
+#include "app_hooks.h"
+#include "diagnostics.h"
 #include "radar_view.h"
 #include "ui.h"
 #include "display.h"

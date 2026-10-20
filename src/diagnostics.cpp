@@ -5,8 +5,8 @@
 #include <WiFi.h>
 #include <esp_heap_caps.h>
 #include "config.h"
-#include "orb_state.h"
-#include "orb_stats.h"
+#include "shared_state.h"
+#include "diagnostics.h"
 #include "display.h"
 #include "audio.h"
 #include "app_shell.h"

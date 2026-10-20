@@ -3,8 +3,8 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include "config.h"
-#include "orb_state.h"
-#include "orb_net_task.h"
+#include "shared_state.h"
+#include "net/net_task.h"
 #include "radar_view.h"
 #include "weather.h"
 #include "weather_client.h"

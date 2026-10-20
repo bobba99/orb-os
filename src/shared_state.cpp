@@ -1,10 +1,10 @@
-// The Orb OS — the state the firmware's top-level modules share. Declared in orb_state.h.
+// The Orb OS — the state the firmware's top-level modules share. Declared in shared_state.h.
 //
 // Moved here from main.cpp unchanged, comments and all; only `static` came off, because
-// these are now read from more than one file. See orb_state.h for why they are still
+// these are now read from more than one file. See shared_state.h for why they are still
 // plain globals.
 #include "config.h"
-#include "orb_state.h"
+#include "shared_state.h"
 
 // ---- shared state ----
 std::vector<Aircraft> g_aircraft;      // latest snapshot: g_acTable, flattened, every poll

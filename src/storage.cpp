@@ -10,9 +10,9 @@
 #include <esp_wifi.h>
 #include <nvs.h>
 #include "config.h"
-#include "orb_state.h"
-#include "orb_storage.h"
-#include "orb_apps.h"
+#include "shared_state.h"
+#include "storage.h"
+#include "app_hooks.h"
 #include "radar_view.h"
 #include "ui.h"
 #include "display.h"

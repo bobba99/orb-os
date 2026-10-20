@@ -1,13 +1,13 @@
 // The Orb OS — the state the firmware's top-level modules share.
 //
 // Until stage 1 of REWRITE_PLAN.md all of this was file-static in a 4,000-line main.cpp.
-// That file is now split by job (orb_net_task, orb_storage, orb_location, orb_wifi,
-// orb_web, orb_apps, orb_stats, and a thin main), and these are the variables more than
+// That file is now split by job (net/wifi, net/http, net/net_task, web_server, location,
+// storage, app_hooks, diagnostics, and a thin main), and these are the variables more than
 // one of those files reads or writes. They are still plain globals, touched from both
-// cores exactly as before: the split moved code and changed no behaviour. Stage 5
+// cores exactly as before: the split moved code and changed no behaviour. Stage 4
 // replaces the cross-core traffic with typed queues; until then this header is the
 // inventory of what crosses a module boundary, and the comments on each variable are in
-// orb_state.cpp beside its definition.
+// shared_state.cpp beside its definition.
 #pragma once
 
 #include <Arduino.h>
@@ -26,11 +26,11 @@
 // together, never one alone: with no OTA partition present the code below would compile
 // and run but fail at the first write, which is worse than not offering it.
 //
-// Here rather than in one .cpp because orb_web.cpp and orb_wifi.cpp both test it. Any
+// Here rather than in one .cpp because web_server.cpp and net/wifi.cpp both test it. Any
 // file that tests it must include this header: an #if on an undefined name is silently 0.
 #define ORB_OTA_ENABLED 0
 
-// ---- defined in orb_state.cpp ----
+// ---- defined in shared_state.cpp ----
 extern std::vector<Aircraft>            g_aircraft;
 extern std::map<std::string, Aircraft>  g_acTable;
 extern SemaphoreHandle_t                g_ac_mutex;

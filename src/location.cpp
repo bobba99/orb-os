@@ -3,13 +3,13 @@
 // follows the position. Moved out of main.cpp unchanged.
 #include <Arduino.h>
 #include <WiFi.h>
-#include <HTTPClient.h>
 #include <ArduinoJson.h>
 #include <Preferences.h>
 #include "config.h"
-#include "orb_state.h"
-#include "orb_location.h"
-#include "orb_apps.h"
+#include "shared_state.h"
+#include "location.h"
+#include "net/http.h"
+#include "app_hooks.h"
 
 // Remember what this place is called. Separate from persist_location() because a position
 // can arrive without a name (?orb setloc with bare coordinates) and a name must never
@@ -157,17 +157,10 @@ static void posix_tz_from_offset(long offsetSec, char *out, size_t n) {
 // Returns false on any failure, having changed nothing but possibly the timezone.
 static bool ip_lookup_location(double &lat, double &lon) {
     if (WiFi.status() != WL_CONNECTED) return false;
-    WiFiClient client;
-    HTTPClient http;
-    http.setConnectTimeout(4000);
-    http.setTimeout(6000);
     // Ask for `offset` (UTC offset in seconds) alongside the position so the clock's
     // timezone follows the located region, not just the map centre.
-    if (!http.begin(client, "http://ip-api.com/json/?fields=status,message,city,region,lat,lon,offset")) return false;
-    const int code = http.GET();
-    if (code != 200) { http.end(); return false; }
-    String body = http.getString();
-    http.end();
+    String body;
+    if (!http_get_text("http://ip-api.com/json/?fields=status,message,city,region,lat,lon,offset", body)) return false;
     JsonDocument doc;
     if (deserializeJson(doc, body)) return false;
     if (String((const char *)(doc["status"] | "")) != "success") return false;
@@ -287,14 +280,8 @@ int host_geocode(const char *query, char names[][40], double *lats, double *lons
     // ADSB_PRIMARY_TLS notes in config.h. This is a place-name lookup with no credentials.
     String url = "http://geocoding-api.open-meteo.com/v1/search?name=" + q +
                  "&count=" + String(maxN) + "&language=en&format=json";
-    WiFiClient client;
-    HTTPClient http;
-    http.setConnectTimeout(4000);
-    http.setTimeout(6000);
-    if (!http.begin(client, url)) return 0;
-    if (http.GET() != 200) { http.end(); return 0; }
-    String body = http.getString();
-    http.end();
+    String body;
+    if (!http_get_text(url.c_str(), body)) return 0;
     JsonDocument doc;
     if (deserializeJson(doc, body)) return 0;
     JsonArrayConst results = doc["results"].as<JsonArrayConst>();

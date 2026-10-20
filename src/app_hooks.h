@@ -1,4 +1,4 @@
-// The Orb OS — app shell hooks and per-app glue. See orb_apps.cpp.
+// The Orb OS — app shell hooks and per-app glue. See app_hooks.cpp.
 #pragma once
 
 void  checkAudioEvents();    // aircraft alert pings for the latest snapshot; loop(), core 1

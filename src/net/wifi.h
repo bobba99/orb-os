@@ -1,4 +1,4 @@
-// The Orb OS — WiFi. See orb_wifi.cpp.
+// The Orb OS — WiFi. See net/wifi.cpp.
 #pragma once
 #include <stddef.h>
 
