@@ -1,4 +1,11 @@
 dependencies:
+  bblanchon/arduinojson:
+    component_hash: 5e6aff2bc5bc988b36c8e90c01e637495ee895ad3af93911860c21ec6da79b6a
+    dependencies: []
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    version: 7.4.3
   espressif/cmake_utilities:
     component_hash: 351350613ceafba240b761b4ea991e0f231ac7a9f59a9ee901f751bddc0bb18f
     dependencies:
@@ -49,10 +56,11 @@ dependencies:
       type: service
     version: 8.4.0
 direct_dependencies:
+- bblanchon/arduinojson
 - espressif/esp_lcd_co5300
 - espressif/esp_lvgl_port
 - idf
 - lvgl/lvgl
-manifest_hash: d3c3daca0ff192048d7860d439a7132a235f9373829a299ba41933efda919837
+manifest_hash: 4e30292b50544e47aa0056e7adcc29aea4f9850cfb52b201e8bfcf5812c56970
 target: esp32s3
 version: 2.0.0

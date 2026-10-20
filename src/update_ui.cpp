@@ -9,6 +9,8 @@ extern void host_update_bright(bool on);
 #include <stdio.h>
 #ifdef ARDUINO
 #include <Arduino.h>
+#elif defined(ESP_PLATFORM)   // pure ESP-IDF: see orb_platform.h
+#include "orb_platform.h"
 #else
 static unsigned long millis() { return 0; }
 #endif

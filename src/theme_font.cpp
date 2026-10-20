@@ -10,6 +10,8 @@
 #include <new>          // std::nothrow — a failed handle alloc must not throw into LVGL
 #ifdef ARDUINO
 #include <Arduino.h>
+#elif defined(ESP_PLATFORM)   // pure ESP-IDF: see orb_platform.h
+#include "orb_platform.h"
 #endif
 
 namespace theme_font {

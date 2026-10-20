@@ -570,12 +570,16 @@ static void wx_text_refresh(void) {
     for (int d = 0; d < 4; ++d) {
         const bool ok = have && d < w.dayCount;
         snprintf(dayS[d],  sizeof(dayS[d]),  "%s", ok ? weather_day_name(w.days[d].date) : "");
-        snprintf(highS[d], sizeof(highS[d]), ok ? "%.0f" : "%s",
-                 ok ? (double)weather_temp(w.days[d].tempMaxC) : 0.0);
-        snprintf(lowS[d],  sizeof(lowS[d]),  ok ? "%.0f" : "%s",
-                 ok ? (double)weather_temp(w.days[d].tempMinC) : 0.0);
-        snprintf(rainS[d], sizeof(rainS[d]), ok ? "%d" : "%s", ok ? w.days[d].rainChance : 0);
-        if (!ok) { highS[d][0] = 0; lowS[d][0] = 0; rainS[d][0] = 0; }
+        // Formatted only when there is a value. This used to pass the number to "%s" when
+        // there was not, which is undefined behaviour (printf reads the 0.0 as a pointer); it
+        // only ever came out right because the line after it blanked the result.
+        if (ok) {
+            snprintf(highS[d], sizeof(highS[d]), "%.0f", (double)weather_temp(w.days[d].tempMaxC));
+            snprintf(lowS[d],  sizeof(lowS[d]),  "%.0f", (double)weather_temp(w.days[d].tempMinC));
+            snprintf(rainS[d], sizeof(rainS[d]), "%d", w.days[d].rainChance);
+        } else {
+            highS[d][0] = 0; lowS[d][0] = 0; rainS[d][0] = 0;
+        }
         condN[d] = ok ? weather_condition(w.days[d].code) : "";
     }
 

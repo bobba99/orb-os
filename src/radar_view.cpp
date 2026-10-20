@@ -38,6 +38,9 @@ extern bool host_location_name(char *out, size_t n);
 #include <stdlib.h>
 #if defined(ESP_PLATFORM)
 #include <esp_heap_caps.h>
+#if !defined(ARDUINO)   // pure ESP-IDF: Serial from orb_platform.h
+#include "orb_platform.h"
+#endif
 #else
 // Desktop simulator: no ESP heap caps and no Serial. The flatten/etch code below is
 // shared (the sim benefits from the same architecture), so shim the two device-isms

@@ -7,6 +7,9 @@
 #ifdef ARDUINO
 #include <esp_heap_caps.h>
 #include <Arduino.h>
+#elif defined(ESP_PLATFORM)   // pure ESP-IDF: see orb_platform.h
+#include "orb_platform.h"
+#include <esp_heap_caps.h>
 #endif
 
 // Nine frame buffers (one per past frame in the animation loop) plus one scratch buffer

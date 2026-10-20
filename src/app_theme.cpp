@@ -2,6 +2,9 @@
 #ifdef ARDUINO
 #include <Arduino.h>
 #include <Preferences.h>
+#elif defined(ESP_PLATFORM)   // pure ESP-IDF: see orb_platform.h
+#include "orb_platform.h"
+#include <cstdio>
 #else
 #include <cstdio>
 #endif

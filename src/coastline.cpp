@@ -5,6 +5,9 @@
 #include <math.h>
 #ifdef ARDUINO
 #include <Arduino.h>
+#elif defined(ESP_PLATFORM)   // pure ESP-IDF: see orb_platform.h
+#include "orb_platform.h"
+#include <chrono>
 #else
 // The simulator has no Arduino clock and does not need a watchdog either; the pacing below
 // is written once and compiles to a comparison that never fires here.

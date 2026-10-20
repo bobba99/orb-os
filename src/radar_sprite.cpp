@@ -2,6 +2,12 @@
 #ifdef ARDUINO
 #include <Arduino.h>
 #include <esp_heap_caps.h>
+#elif defined(ESP_PLATFORM)   // pure ESP-IDF: see orb_platform.h
+#include "orb_platform.h"
+#include <esp_heap_caps.h>
+#include <cstdio>
+#include <cstdarg>
+#include <cstdlib>
 #else
 #include <cstdio>
 #include <cstdarg>

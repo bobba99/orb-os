@@ -8,6 +8,12 @@
 #include <Preferences.h>
 #include <SD.h>
 #include "sdcard.h"
+#elif defined(ESP_PLATFORM)   // pure ESP-IDF: see orb_platform.h
+#include "orb_platform.h"
+#include <cstdio>
+#include <string>
+#include <dirent.h>
+#include <unistd.h>   // rmdir, for the simulator's delete path
 #else
 #include <cstdio>
 #include <string>
