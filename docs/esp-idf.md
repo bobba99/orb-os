@@ -49,7 +49,7 @@ place of their own.
 | Clock and Flight Tracker apps, theme, splash | Headlines, Settings, the web server |
 | | WiFi and the aircraft feed, so the scope says "No WiFi" |
 | | Audio (a stub reporting no codec), IMU, battery, idle dimming |
-| | Baked theme art from flash: art is decoded from the card's PNGs instead |
+| Baked theme art and fonts, read from the themeart partition | Baking: a theme installed or changed is not re-baked yet |
 
 ### Boot to the bring-up page
 
