@@ -1,0 +1,9 @@
+## The display stack, pinned. dependencies.lock at the project root records the exact
+## versions resolved; these ranges only say what a deliberate update may move to.
+dependencies:
+  idf: "5.5.6"
+  # LVGL 8 for this stage, the version the Arduino build already runs (REWRITE_PLAN.md
+  # defers v9). Exact, because LVGL changes rendering between patch releases.
+  lvgl/lvgl: "8.4.0"
+  espressif/esp_lvgl_port: "~2.9.0"
+  espressif/esp_lcd_co5300: "~2.2.0"
