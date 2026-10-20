@@ -1,0 +1,5 @@
+# Layered over sdkconfig.defaults for the display and knob bring-up page (main/bringup.cpp).
+# Built in its own folder so it never disturbs the app build's configuration:
+#   idf.py -B build-bringup -D SDKCONFIG=build-bringup/sdkconfig \
+#          -D SDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.bringup" build
+CONFIG_ORB_BRINGUP_PAGE=y

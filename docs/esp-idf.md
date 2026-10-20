@@ -53,8 +53,15 @@ place of their own.
 
 ### Boot to the bring-up page
 
-For the first flash of a new display or knob driver, before the apps are trusted on it, set
-`CONFIG_ORB_BRINGUP_PAGE=y` (`idf.py menuconfig`, "The Orb OS"). The Orb then boots to a
+For the first flash of a new display or knob driver, before the apps are trusted on it, build
+with `sdkconfig.bringup` layered on, in its own folder so the app build's configuration is
+left alone:
+
+```bash
+idf.py -B build-bringup -D SDKCONFIG=build-bringup/sdkconfig -D SDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.bringup" -p /dev/cu.usbmodem21101 flash
+```
+
+That sets `CONFIG_ORB_BRINGUP_PAGE=y`. The Orb then boots to a
 test page that exercises only the panel and the knob (`main/bringup.cpp`) and opens neither
 the card nor NVS.
 
