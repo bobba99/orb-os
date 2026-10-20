@@ -18,11 +18,11 @@
 
 #include "board.h"
 #include "display.h"
+#include "display_idf.h"
 #include "knob.h"
 
 static const char *TAG = "orb";
 
-static constexpr uint8_t BRIGHTNESS_DEFAULT = 200;   // src/config.h's default, 0..255
 static constexpr int     ARC_DETENTS        = 24;    // one lap of the arc
 
 static lv_obj_t *s_arc     = nullptr;
@@ -93,6 +93,9 @@ static void input_task(void *) {
     uint32_t presses = 0;
     uint32_t lastRock = 0;
     for (;;) {
+        // The lock is held for the whole pass and let go only for the sleep at the bottom,
+        // which is when esp_lvgl_port's task renders. See display_idf.h.
+        display_idf::lock();
         knob::poll();
         if (knob::takeLongPress()) {
             ESP_LOGI(TAG, "knob long-press -> reboot");
@@ -107,7 +110,7 @@ static void input_task(void *) {
             detents += delta;
             if (pressed) ++presses;
             if (rocked) lastRock = rock;
-            if (display::lock(100)) {
+            {
                 char buf[48];
                 snprintf(buf, sizeof(buf), "%ld", (long)detents);
                 lv_label_set_text(s_count, buf);
@@ -121,9 +124,9 @@ static void input_task(void *) {
                     snprintf(buf, sizeof(buf), "rock, %lu ms", (unsigned long)knob::lastRockGapMs());
                     lv_label_set_text(s_rock, buf);
                 }
-                display::unlock();
             }
         }
+        display_idf::unlock();
         vTaskDelay(pdMS_TO_TICKS(5));   // the Arduino loop's own 5 ms pace
     }
 }
@@ -138,10 +141,9 @@ extern "C" void app_main(void) {
         ESP_LOGE(TAG, "display did not come up; knob still starts so the log shows it");
     } else {
         display::setBrightness(BRIGHTNESS_DEFAULT);
-        if (display::lock(0)) {
-            build_bringup_screen();
-            display::unlock();
-        }
+        display_idf::lock();
+        build_bringup_screen();
+        display_idf::unlock();
     }
 
     knob::begin();

@@ -18,4 +18,12 @@ if(NOT "${IDF_VERSION_MAJOR}.${IDF_VERSION_MINOR}.${IDF_VERSION_PATCH}" STREQUAL
                         "See docs/esp-idf.md.")
 endif()
 
+# One LVGL configuration for all three builds. The Arduino firmware and the simulator read
+# include/lv_conf.h; so does this one. LV_KCONFIG_IGNORE matters as much as the path: LVGL
+# fills every setting lv_conf.h leaves out from Kconfig when Kconfig is present, which would
+# make this build differ from the other two in whatever nobody thought to write down.
+idf_build_set_property(COMPILE_OPTIONS "-I${CMAKE_CURRENT_LIST_DIR}/include" APPEND)
+idf_build_set_property(COMPILE_OPTIONS "-DLV_KCONFIG_IGNORE" APPEND)
+idf_build_set_property(COMPILE_OPTIONS "-DLV_CONF_INCLUDE_SIMPLE" APPEND)
+
 project(orb_os)

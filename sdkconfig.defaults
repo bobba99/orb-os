@@ -51,13 +51,6 @@ CONFIG_PCNT_ISR_IRAM_SAFE=y
 CONFIG_GPIO_CTRL_FUNC_IN_IRAM=y
 
 # --- LVGL 8 --------------------------------------------------------------------------
-CONFIG_LV_COLOR_DEPTH_16=y
-# The CO5300 takes RGB565 high byte first. LVGL 8 swaps at render time (esp_lvgl_port's
-# swap_bytes flag is LVGL 9 only).
-CONFIG_LV_COLOR_16_SWAP=y
-# LVGL allocates through malloc, so the 512-byte rule above sends its big objects to PSRAM.
-CONFIG_LV_MEM_CUSTOM=y
-CONFIG_LV_FONT_MONTSERRAT_14=y
-CONFIG_LV_FONT_MONTSERRAT_20=y
-CONFIG_LV_FONT_MONTSERRAT_28=y
-CONFIG_LV_FONT_MONTSERRAT_48=y
+# Not configured here. LVGL reads include/lv_conf.h, the same file the Arduino build and
+# the simulator use, with Kconfig switched off (see the root CMakeLists.txt). Colour stays
+# unswapped there because baked theme art is stored that way; the display flush swaps.

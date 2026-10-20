@@ -1,13 +1,16 @@
 // The Orb OS — CO5300 AMOLED over QSPI, driven by esp_lcd, with LVGL 8 on esp_lvgl_port.
 //
-// Bring-up for stage 2 of REWRITE_PLAN.md. The panel sequence is Waveshare's (board package
-// waveshare/esp32_s3_touch_amoled_1_75 3.0.1), and the sizes and offsets are the ones the
-// Arduino firmware has run on real Orbs: src/display.cpp is the reference for what this
-// panel needs, and each choice below that differs from it says why.
+// Implements src/display.h, the contract the shared UI code calls, for ESP-IDF (stage 2 of
+// REWRITE_PLAN.md). The panel sequence is Waveshare's (board package
+// waveshare/esp32_s3_touch_amoled_1_75 3.0.1). The sizes, offsets and the rules below are the
+// ones the Arduino firmware has run on real Orbs: src/display.cpp is the reference for what
+// this panel needs, and each choice here that differs from it says why.
 #include "display.h"
+#include "display_idf.h"
 #include "board.h"
 
 #include "esp_log.h"
+#include "esp_timer.h"
 #include "esp_heap_caps.h"
 #include "driver/spi_master.h"
 #include "esp_lcd_panel_io.h"
@@ -33,10 +36,12 @@ static const char *TAG = "display";
 // network stack competes for.
 static constexpr int DRAW_BUF_LINES = 40;
 
+// (Not config.h's LCD_QSPI_HZ, which is the Arduino build's 80 MHz.)
 // 40 MHz, the vendor's figure and esp_lcd_co5300's default. The Arduino build runs this
 // panel at 80 MHz, but that was tuned on Arduino_GFX; on a new driver, first light comes
 // at the clock the vendor stands behind, and 80 is a measured step afterwards.
-static constexpr int LCD_QSPI_HZ = 40 * 1000 * 1000;
+// Not config.h's LCD_QSPI_HZ, which is the Arduino build's 80 MHz.
+static constexpr int PANEL_QSPI_HZ = 40 * 1000 * 1000;
 
 // Waveshare's init sequence for this panel. The column window starts at 6 (0x0006..0x01D7),
 // which is the BOARD_LCD_COL_OFFSET gap set again below for every later window.
@@ -59,6 +64,14 @@ static const co5300_lcd_init_cmd_t kInitCmds[] = {
 
 static esp_lcd_panel_handle_t s_panel = nullptr;
 static lv_disp_t             *s_disp  = nullptr;
+static lv_disp_drv_t         *s_drv   = nullptr;
+static void (*s_portFlush)(lv_disp_drv_t *, const lv_area_t *, lv_color_t *) = nullptr;
+static uint16_t               s_rotation = 0;
+static volatile bool          s_quiet = false;
+
+// The counters src/display.h promises, for /health and [memdbg] once those are ported.
+// One writer (the flush, in the port task); readers only want a trend, so plain words.
+static uint32_t s_frames = 0, s_flushUs = 0, s_flushedPx = 0;
 
 // The CO5300 only accepts windows that start on an even pixel and end on an odd one, in
 // both axes. Anything else draws the strip one pixel off. Same rule as src/display.cpp.
@@ -69,10 +82,26 @@ static void rounder(lv_area_t *area) {
     area->y2 = ((area->y2 >> 1) << 1) + 1;
 }
 
+// LVGL renders RGB565 low byte first (LV_COLOR_16_SWAP is 0 in the shared lv_conf.h,
+// because baked theme art in flash is stored that way) and the CO5300 takes high byte
+// first. Arduino_GFX swapped on the way out; esp_lvgl_port's LVGL 8 flush does not, so the
+// swap happens here, in place, before its flush hands the strip to DMA. In place is safe:
+// LVGL redraws the whole buffer before it next uses it.
+static void swap_flush(lv_disp_drv_t *drv, const lv_area_t *area, lv_color_t *px) {
+    const int64_t t0 = esp_timer_get_time();
+    const size_t n = (size_t)(area->x2 - area->x1 + 1) * (size_t)(area->y2 - area->y1 + 1);
+    uint16_t *p = (uint16_t *)px;
+    for (size_t i = 0; i < n; ++i) p[i] = (uint16_t)((p[i] << 8) | (p[i] >> 8));
+    s_flushedPx += n;
+    if (lv_disp_flush_is_last(drv)) ++s_frames;
+    s_portFlush(drv, area, px);
+    s_flushUs += (uint32_t)(esp_timer_get_time() - t0);
+}
+
 bool display::begin() {
     const size_t bufPx = (size_t)BOARD_LCD_H_RES * DRAW_BUF_LINES;
 
-    ESP_LOGI(TAG, "CO5300 over QSPI at %d MHz", LCD_QSPI_HZ / 1000000);
+    ESP_LOGI(TAG, "CO5300 over QSPI at %d MHz", PANEL_QSPI_HZ / 1000000);
     // Field by field rather than through CO5300_PANEL_BUS_QSPI_CONFIG and
     // CO5300_PANEL_IO_QSPI_CONFIG: those are C designated initializers in an order C++
     // rejects. Same values as the macros in esp_lcd_co5300 2.2.0, except that the unused
@@ -96,7 +125,7 @@ bool display::begin() {
     ioCfg.cs_gpio_num       = BOARD_LCD_CS;
     ioCfg.dc_gpio_num       = -1;
     ioCfg.spi_mode          = 0;
-    ioCfg.pclk_hz           = LCD_QSPI_HZ;
+    ioCfg.pclk_hz           = PANEL_QSPI_HZ;
     ioCfg.trans_queue_depth = 10;
     ioCfg.lcd_cmd_bits      = 32;   // QSPI: opcode, then the command in the middle byte
     ioCfg.lcd_param_bits    = 8;
@@ -121,6 +150,9 @@ bool display::begin() {
     // LVGL on core 1, as on Arduino: core 0 belongs to WiFi and the network task.
     lvgl_port_cfg_t portCfg = ESP_LVGL_PORT_INIT_CONFIG();
     portCfg.task_affinity = 1;
+    // LVGL's clock (lv_conf.h leaves the tick to the port here). 1 ms, as millis() was on
+    // Arduino, rather than the port's default 5: shared code times animations off it.
+    portCfg.timer_period_ms = 1;
     TRY(lvgl_port_init(&portCfg), "LVGL port");
 
     lvgl_port_display_cfg_t dispCfg = {};
@@ -132,7 +164,14 @@ bool display::begin() {
     dispCfg.vres          = BOARD_LCD_V_RES;
     dispCfg.rounder_cb    = rounder;
     dispCfg.flags.buff_dma = 1;
+    if (!lvgl_port_lock(0)) return false;
     s_disp = lvgl_port_add_disp(&dispCfg);
+    if (s_disp) {
+        s_drv = s_disp->driver;
+        s_portFlush = s_drv->flush_cb;
+        s_drv->flush_cb = swap_flush;
+    }
+    lvgl_port_unlock();
     if (!s_disp) {
         ESP_LOGE(TAG, "LVGL display registration failed");
         return false;
@@ -143,6 +182,12 @@ bool display::begin() {
     return true;
 }
 
+// LVGL renders in esp_lvgl_port's task here, during the main loop's sleep (see
+// display_idf.h), so there is nothing to pump. Kept so shared code that calls it links.
+void display::loop() {}
+
+void display::markInput(uint32_t) {}
+
 void display::setBrightness(uint8_t level) {
     if (!s_panel) return;
     // The driver takes a percentage and scales it back to 0..255 itself, so round to the
@@ -151,5 +196,36 @@ void display::setBrightness(uint8_t level) {
     esp_lcd_panel_co5300_set_brightness(s_panel, pct);
 }
 
-bool display::lock(uint32_t timeoutMs) { return lvgl_port_lock(timeoutMs); }
-void display::unlock() { lvgl_port_unlock(); }
+uint32_t display::inactiveMs() { return s_disp ? lv_disp_get_inactive_time(s_disp) : 0; }
+void display::noteActivity() { if (s_disp) lv_disp_trig_activity(s_disp); }
+
+// Arbitrary rotation needs src/display.cpp's PSRAM framebuffer path, which is not ported
+// yet. Every Orb so far runs at 0; anything else is refused out loud rather than drawn wrong.
+void display::setRotation(uint16_t degrees) {
+    degrees %= 360;
+    if (degrees != 0) {
+        ESP_LOGW(TAG, "rotation %u° requested; only 0° is ported so far, staying at 0°", degrees);
+        return;
+    }
+    s_rotation = 0;
+}
+uint16_t display::rotation() { return s_rotation; }
+
+uint32_t display_frames()     { return s_frames; }
+uint32_t display_lvgl_us()    { return 0; }   // LVGL runs in esp_lvgl_port's task; not measured yet
+uint32_t display_flush_us()   { return s_flushUs; }
+uint32_t display_flushed_px() { return s_flushedPx; }
+uint32_t display_pushed_px()  { return s_flushedPx; }
+uint32_t display_te_wait_us() { return 0; }
+// The staged flush and the TE wait are Arduino_GFX-era fixes for tearing. Not ported yet:
+// both report off, and asking for them changes nothing.
+void display_set_stage(bool) {}
+bool display_stage(void) { return false; }
+void display_set_te(bool) {}
+bool display_te(void) { return false; }
+
+void orb_log_set_quiet(bool quiet) { s_quiet = quiet; }
+bool orb_log_quiet() { return s_quiet; }
+
+bool display_idf::lock(uint32_t timeoutMs) { return lvgl_port_lock(timeoutMs); }
+void display_idf::unlock() { lvgl_port_unlock(); }
