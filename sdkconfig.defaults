@@ -44,6 +44,12 @@ CONFIG_MBEDTLS_CERTIFICATE_BUNDLE_DEFAULT_FULL=y
 # flash encryption on, and this device does not have it.
 CONFIG_MBEDTLS_DEFAULT_MEM_ALLOC=y
 
+# --- microSD -------------------------------------------------------------------------
+# Long file names. Every theme file is longer than 8.3 ("clock_style.json"), and without this
+# FAT can see the folder and none of the files in it.
+CONFIG_FATFS_LFN_HEAP=y
+CONFIG_FATFS_MAX_LFN=255
+
 # --- Knob ----------------------------------------------------------------------------
 # The detent and rock logic runs in the PCNT and GPIO interrupt handlers, which must keep
 # working while flash is busy (an SD read, an NVS write).

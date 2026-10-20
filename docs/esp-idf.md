@@ -7,10 +7,56 @@ is finished, two firmwares live in this repository side by side:
 |---|---|---|
 | Source | `main/`, `components/` | `src/` |
 | Build | `idf.py` | PlatformIO (`platformio.ini`) |
-| Status | bring-up: display and knob | everything |
+| Status | clock and flight tracker UI, no network yet | everything |
 
 The desktop simulator still builds from `src/` with PlatformIO (`pio run -e native`) and is
 not affected by anything here.
+
+## How the shared code reaches ESP-IDF
+
+The UI, theme and app code is not copied. `components/orb_ui` compiles it straight from
+`src/`, the same files the simulator builds, so the simulator keeps testing the very code
+the device runs. Three things make that work:
+
+- **`src/orb_platform.h`** gives pure ESP-IDF the few Arduino calls the shared code makes
+  (`Serial.printf`/`println`, `millis`, `micros`, `delay`, `ESP.getFreePsram`/`restart`),
+  as thin wrappers over ESP-IDF, and says where the card is mounted (`ORB_SD_ROOT`). On
+  Arduino it is just `<Arduino.h>`. The names stay Arduino's for now so the shared files
+  compile unchanged on all three builds; when the Arduino build retires they become neutral
+  names in one search-and-replace.
+- **Three branches where there were two.** A shared file that chose between Arduino and the
+  simulator with `#ifdef ARDUINO` gains `#elif defined(ESP_PLATFORM)` where the device needs
+  something the simulator does not: NVS instead of a file in `/tmp`, the card's real root.
+  The Arduino and simulator branches are never edited, and every change is checked against
+  both: the Arduino build's sizes and warnings, the simulator build, `tools/audit.py`.
+- **Drivers implement the existing contracts.** `components/display` implements
+  `src/display.h`, `orb_knob` implements `src/knob.h`, and so on for `sdcard.h`, `audio.h`
+  and `rtc_pcf85063.h`. The shared code does not know which firmware it is in.
+
+`components/orb_shared` puts `src/` on the include path of this project's components only.
+`src/` holds a `config.h` and a `storage.h`, and ESP-IDF components must never find those in
+place of their own.
+
+### What runs, and what does not yet
+
+| Ported | Not yet |
+|---|---|
+| Display (CO5300, LVGL 8, byte-swapped flush) | Arbitrary rotation, the TE wait, the staged flush |
+| Knob on PCNT, rock gesture, long-press reboot | |
+| SD card (SPI, 20/10/4 MHz negotiation, never formats) | |
+| Settings in NVS, same keys as Arduino, never erases | Most settings: only theme, app skin, wind, tz, brightness, place name are read |
+| RTC seeds the clock at boot | NTP, writing NTP time back to the RTC |
+| Clock and Flight Tracker apps, theme, splash | Headlines, Settings, the web server |
+| | WiFi and the aircraft feed, so the scope says "No WiFi" |
+| | Audio (a stub reporting no codec), IMU, battery, idle dimming |
+| | Baked theme art from flash: art is decoded from the card's PNGs instead |
+
+### Boot to the bring-up page
+
+For the first flash of a new display or knob driver, before the apps are trusted on it, set
+`CONFIG_ORB_BRINGUP_PAGE=y` (`idf.py menuconfig`, "The Orb OS"). The Orb then boots to a
+test page that exercises only the panel and the knob (`main/bringup.cpp`) and opens neither
+the card nor NVS.
 
 ## The toolchain: `idf.py`, ESP-IDF v5.5.6
 
@@ -80,7 +126,12 @@ Ctrl+] leaves the monitor. The port name is the one PlatformIO auto-detects. Orb
 - It writes the bootloader, the partition table and the app. The partition table is the
   Arduino build's own `partitions_16MB_themeart.csv`, read directly rather than copied, so
   `nvs` keeps its offset and size and the WiFi network the Arduino firmware saved survives.
-- The bring-up firmware never opens NVS, so it cannot change that network either.
+- The firmware opens NVS only through `components/orb_prefs`, which uses the namespace
+  `capsuleradar` and nothing else and never erases the partition, even when ESP-IDF reports
+  it needs to. It reads and writes the same keys as the Arduino firmware, with the same
+  encodings, so either firmware can be flashed over the other. It never touches the WiFi
+  driver's own namespace.
+- The SD card is never formatted, even if it will not mount.
 - Going back is one Arduino flash: `pio run -e esp32-s3-amoled-175 -t upload`.
 
 ## Configuration

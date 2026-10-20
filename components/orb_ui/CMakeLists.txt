@@ -25,7 +25,7 @@ set(SHARED
 list(TRANSFORM SHARED PREPEND "${ORB_SRC}/")
 idf_component_register(SRCS ${SHARED}
                        REQUIRES orb_shared lvgl
-                       PRIV_REQUIRES pngdec esp_timer esp_partition spi_flash nvs_flash)
+                       PRIV_REQUIRES pngdec orb_prefs orb_sdcard orb_audio esp_timer esp_partition spi_flash)
 # The shared files are held to the warning policy of the builds they came from, where a
 # warning is reported and not fatal. They are compiled with every warning on and looked at;
 # a real defect found that way is fixed in src/, and these flags only stop a style warning

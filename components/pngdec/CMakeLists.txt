@@ -6,14 +6,14 @@
 # the repository, its version is pinned by being here; update by replacing src/ whole.
 idf_component_register(SRCS "src/PNGdec.cpp" "src/adler32.c" "src/crc32.c" "src/infback.c"
                             "src/inffast.c" "src/inflate.c" "src/inftrees.c" "src/zutil.c"
-                            "src/s3_simd_rgb565.S"
                        INCLUDE_DIRS "src")
 # PNGdec's own "not an Arduino" switch, as the simulator build sets it (platformio.ini):
 # without it PNGdec.h reaches for <Arduino.h>. Public, because it changes the header.
 target_compile_definitions(${COMPONENT_LIB} PUBLIC __LINUX__)
-# The ESP32-S3 SIMD colour conversion the Arduino device build uses (png.inl tests the
-# Arduino board macro for it). Private: it only selects code inside PNGdec.cpp.
-target_compile_definitions(${COMPONENT_LIB} PRIVATE ARDUINO_ESP32S3_DEV)
+# Not the ESP32-S3 SIMD colour conversion the Arduino build uses: s3_simd_rgb565.S needs
+# Espressif's esp-dsp library, which Arduino-ESP32 bundles and this project does not carry.
+# PNGdec falls back to its portable C path, which produces the same pixels more slowly; with
+# theme art baked into flash a PNG is rarely decoded on the device at all.
 # The same scanline buffer both other builds use: 512 px RGBA rows need it, 4096 cuts the
 # right edge off.
 target_compile_definitions(${COMPONENT_LIB} PUBLIC PNG_MAX_BUFFERED_PIXELS=8192)

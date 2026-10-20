@@ -41,3 +41,12 @@
 #define BOARD_KNOB_A           GPIO_NUM_18   // encoder CLK
 #define BOARD_KNOB_B           GPIO_NUM_17   // encoder DT
 #define BOARD_KNOB_SW          GPIO_NUM_16   // push switch, active low
+
+// --- microSD, SPI mode ------------------------------------------------------------
+// Not in config.h either: src/sdcard.cpp holds them, with the schematic reading behind them
+// (the socket's CMD/CLK/D0/D3 are wired as MOSI/SCK/MISO/CS; D1, D2 and card-detect are not
+// connected). Same four values.
+#define BOARD_SD_MOSI          GPIO_NUM_1
+#define BOARD_SD_SCK           GPIO_NUM_2
+#define BOARD_SD_MISO          GPIO_NUM_3
+#define BOARD_SD_CS            GPIO_NUM_41

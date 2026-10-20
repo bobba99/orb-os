@@ -1,0 +1,12 @@
+menu "The Orb OS"
+
+    config ORB_BRINGUP_PAGE
+        bool "Boot to the display and knob bring-up page instead of the apps"
+        default n
+        help
+            Shows a plain test page that exercises only the panel and the knob: a detent
+            count, an arc that follows the knob, presses, rock timing and colour swatches.
+            For the first flash of a new display or knob driver, before the apps are trusted
+            on it. Opens no SD card and no NVS.
+
+endmenu

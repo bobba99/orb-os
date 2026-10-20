@@ -1,130 +1,145 @@
 // The Orb OS — ESP-IDF entry point.
 //
-// Stage 2 of REWRITE_PLAN.md starts here: the display and the knob, before any app is
-// ported. What is on screen is a bring-up page that exercises both, so a flash to a real Orb
-// answers the two questions this stage has to answer first: does the panel draw correctly
-// (orientation, colour order, the 6-pixel column gap, the 2-pixel window rule), and does the
-// knob count, press and rock the way the Arduino firmware's does.
+// Stage 2 of REWRITE_PLAN.md: the clock and the flight tracker, running the very UI code the
+// Arduino firmware and the simulator run (components/orb_ui compiles it from src/). The boot
+// order is the Arduino firmware's setup() (src/main.cpp), trimmed to what these two apps
+// need; each step names the Arduino step it stands for. What is not here yet is listed at the
+// bottom of the boot, so it is said once rather than discovered.
 //
-// NVS is deliberately not opened. Nothing here needs it, and leaving it alone means flashing
-// this over an Orb cannot touch the WiFi credentials the Arduino firmware saved.
+// LVGL runs in esp_lvgl_port's task. The app loop below holds the display lock for its whole
+// pass and lets go only while it sleeps, which is when that task renders, so every LVGL call
+// the shared code makes is serialised with the renderer exactly as it was in Arduino's loop().
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+#include <sys/time.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_log.h"
 #include "esp_system.h"
 #include "esp_heap_caps.h"
+#include "sdkconfig.h"
 #include "lvgl.h"
 
-#include "board.h"
+#include "config.h"
 #include "display.h"
 #include "display_idf.h"
 #include "knob.h"
+#include "sdcard.h"
+#include "rtc_pcf85063.h"
+#include "orb_prefs.h"
+
+#include "app_shell.h"
+#include "app_theme.h"
+#include "input_router.h"
+#include "theme_select.h"
+#include "theme_style.h"
+#include "theme_art.h"
+#include "theme_font.h"
+#include "theme_audio.h"
+#include "clock_view.h"
+#include "clock_wind.h"
+#include "wind_notice.h"
+#include "radar_view.h"
+#include "ui.h"
 
 static const char *TAG = "orb";
 
-static constexpr int     ARC_DETENTS        = 24;    // one lap of the arc
+void bringup_run();   // bringup.cpp
 
-static lv_obj_t *s_arc     = nullptr;
-static lv_obj_t *s_count   = nullptr;
-static lv_obj_t *s_presses = nullptr;
-static lv_obj_t *s_rock    = nullptr;
+// The owner's timezone: NVS "tz" as Arduino stored it, else the compiled default.
+static char s_tz[48] = TZ_STR;
 
-static void build_bringup_screen() {
-    lv_obj_t *scr = lv_scr_act();
-    lv_obj_set_style_bg_color(scr, lv_color_black(), 0);
-    lv_obj_set_style_bg_opa(scr, LV_OPA_COVER, 0);
+// The idle / face-down / update-in-progress combination lives in src/main.cpp's
+// applyBrightness() and is not ported; for now the owner's level is simply applied.
+static int s_brightness = BRIGHTNESS_DEFAULT;
 
-    // Touching the round edge on all sides is the check for the column gap: an offset panel
-    // clips the ring on one side and leaves a gap on the other.
-    s_arc = lv_arc_create(scr);
-    lv_obj_set_size(s_arc, BOARD_LCD_H_RES - 8, BOARD_LCD_V_RES - 8);
-    lv_obj_center(s_arc);
-    lv_arc_set_rotation(s_arc, 270);
-    lv_arc_set_bg_angles(s_arc, 0, 360);
-    lv_arc_set_range(s_arc, 0, ARC_DETENTS);
-    lv_arc_set_value(s_arc, 0);
-    lv_obj_remove_style(s_arc, nullptr, LV_PART_KNOB);
-    lv_obj_clear_flag(s_arc, LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_set_style_arc_width(s_arc, 14, LV_PART_MAIN);
-    lv_obj_set_style_arc_width(s_arc, 14, LV_PART_INDICATOR);
-    lv_obj_set_style_arc_color(s_arc, lv_color_hex(0x202020), LV_PART_MAIN);
-    lv_obj_set_style_arc_color(s_arc, lv_color_hex(0xE05A3A), LV_PART_INDICATOR);
-
-    lv_obj_t *title = lv_label_create(scr);
-    lv_label_set_text(title, "The Orb OS\nESP-IDF bring-up");
-    lv_obj_set_style_text_align(title, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_set_style_text_font(title, &lv_font_montserrat_20, 0);
-    lv_obj_set_style_text_color(title, lv_color_white(), 0);
-    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 70);
-
-    s_count = lv_label_create(scr);
-    lv_label_set_text(s_count, "0");
-    lv_obj_set_style_text_font(s_count, &lv_font_montserrat_48, 0);
-    lv_obj_set_style_text_color(s_count, lv_color_white(), 0);
-    lv_obj_align(s_count, LV_ALIGN_CENTER, 0, -10);
-
-    s_presses = lv_label_create(scr);
-    lv_label_set_text(s_presses, "turn the knob, push it");
-    lv_obj_set_style_text_font(s_presses, &lv_font_montserrat_20, 0);
-    lv_obj_set_style_text_color(s_presses, lv_color_hex(0xA0A0A0), 0);
-    lv_obj_align(s_presses, LV_ALIGN_CENTER, 0, 50);
-
-    s_rock = lv_label_create(scr);
-    lv_label_set_text(s_rock, "");
-    lv_obj_set_style_text_font(s_rock, &lv_font_montserrat_20, 0);
-    lv_obj_set_style_text_color(s_rock, lv_color_hex(0x7DDB8A), 0);
-    lv_obj_align(s_rock, LV_ALIGN_CENTER, 0, 90);
-
-    // Red, green and blue swatches: wrong colour order or byte swap shows up here at once.
-    static const uint32_t kSwatch[] = {0xFF0000, 0x00FF00, 0x0000FF};
-    for (int i = 0; i < 3; ++i) {
-        lv_obj_t *sw = lv_obj_create(scr);
-        lv_obj_remove_style_all(sw);
-        lv_obj_set_size(sw, 40, 40);
-        lv_obj_set_style_bg_color(sw, lv_color_hex(kSwatch[i]), 0);
-        lv_obj_set_style_bg_opa(sw, LV_OPA_COVER, 0);
-        lv_obj_align(sw, LV_ALIGN_BOTTOM_MID, (i - 1) * 56, -80);
-    }
+static void psram_mark(const char *stage) {
+    printf("[psram] %-26s free %6u KB\n", stage,
+           (unsigned)(heap_caps_get_free_size(MALLOC_CAP_SPIRAM) / 1024));
+    printf("[intram] %-25s free %6u B  largest %5u B\n", stage,
+           (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
+           (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL));
 }
 
-static void input_task(void *) {
-    int32_t  detents = 0;
-    uint32_t presses = 0;
-    uint32_t lastRock = 0;
+// --- host functions the shared code calls (src/ declares them extern) ----------------
+
+// update_ui's hook: an update notice on screen puts the panel at full brightness, however
+// dim the owner keeps it. As src/main.cpp host_update_bright(), minus the idle state that
+// is not ported.
+void host_update_bright(bool on) {
+    display::noteActivity();
+    display::setBrightness(on ? 255 : (uint8_t)s_brightness);
+}
+
+// The place's name for the flight tracker's location line: the same NVS key
+// src/location.cpp saves it under. False when nothing has ever named it.
+bool host_location_name(char *out, size_t n) {
+    if (!n) return false;
+    return orb_prefs::getString("homeName", out, n) && out[0];
+}
+
+// src/main.cpp utc_to_time() + rtc_seed_clock(): the RTC holds UTC, mktime() assumes local
+// time, so convert under UTC0 and put the owner's zone back afterwards.
+static void rtc_seed_clock() {
+    struct tm utc;
+    if (!rtc_read(&utc)) { printf("[rtc] no valid time stored\n"); return; }
+    setenv("TZ", "UTC0", 1); tzset();
+    const time_t t = mktime(&utc);
+    setenv("TZ", s_tz, 1); tzset();
+    struct timeval tv = { t, 0 };
+    settimeofday(&tv, nullptr);
+    printf("[rtc] system clock seeded from RTC\n");
+}
+
+// src/storage.cpp applyThemeSettings(), the clock half: the mainspring and the theme's sounds
+// belong to the design and are replaced whole whenever one is applied.
+static void apply_theme_clock() {
+    const theme_style::Clock &cs = theme_style::clock();
+    clock_wind::applyTheme(cs.windOn, cs.windSecs, cs.windTurns, cs.windSound, cs.windNotice);
+    theme_audio::load();
+}
+
+// Flight Tracker's app-shell hooks, as src/app_hooks.cpp has them minus the network-task
+// gating (g_radarViewActive), which arrives with the feed.
+static void flight_enter()          { ui_show_view(0); radar::knobEnter(); }
+static void flight_exit()           { radar::knobExit(); }
+static void flight_turn(int delta)  { radar::knobTurn(delta); }
+static void flight_press()          { radar::knobPress(); }
+
+// src/main.cpp loop(), the parts these two apps use.
+static void app_loop(void *) {
     for (;;) {
-        // The lock is held for the whole pass and let go only for the sleep at the bottom,
-        // which is when esp_lvgl_port's task renders. See display_idf.h.
         display_idf::lock();
         knob::poll();
-        if (knob::takeLongPress()) {
-            ESP_LOGI(TAG, "knob long-press -> reboot");
+        wind_notice::tick();
+        wind_notice::animate();
+        if (knob::takeLongPress()) {   // held ~8 s: the manual recovery reboot
+            printf("[main] knob long-press -> reboot\n");
             vTaskDelay(pdMS_TO_TICKS(50));
             esp_restart();
         }
-        const int32_t delta = knob::takeDelta();
+        const int32_t kd = knob::takeDelta();
         const bool pressed = knob::takePress();
-        const uint32_t rock = knob::lastRockMs();
-        const bool rocked = rock != 0 && rock != lastRock;
-        if (delta || pressed || rocked) {
-            detents += delta;
-            if (pressed) ++presses;
-            if (rocked) lastRock = rock;
-            {
-                char buf[48];
-                snprintf(buf, sizeof(buf), "%ld", (long)detents);
-                lv_label_set_text(s_count, buf);
-                const int32_t lap = ((detents % ARC_DETENTS) + ARC_DETENTS) % ARC_DETENTS;
-                lv_arc_set_value(s_arc, lap);
-                if (pressed) {
-                    snprintf(buf, sizeof(buf), "pressed %lu", (unsigned long)presses);
-                    lv_label_set_text(s_presses, buf);
-                }
-                if (rocked) {
-                    snprintf(buf, sizeof(buf), "rock, %lu ms", (unsigned long)knob::lastRockGapMs());
-                    lv_label_set_text(s_rock, buf);
-                }
+        if (kd != 0 || pressed) display::noteActivity();
+        input_router::dispatch((int)kd, pressed);
+        input_router::tick();
+
+        // The HUD date and the scope's clock, every 5 s, as the Arduino status tick does.
+        static TickType_t lastStatus = 0;
+        if (xTaskGetTickCount() - lastStatus > pdMS_TO_TICKS(5000)) {
+            lastStatus = xTaskGetTickCount();
+            char clk[8] = "--:--";
+            time_t now = time(nullptr);
+            struct tm ti;
+            if (now > 1700000000L && localtime_r(&now, &ti)) {
+                snprintf(clk, sizeof(clk), "%02d:%02d", ti.tm_hour, ti.tm_min);
+                char date[20];
+                strftime(date, sizeof(date), "%d %b %Y", &ti);
+                ui_set_date(date);
             }
+            ui_set_status(false, false, -127, clk);   // no WiFi yet: the HUD says so
         }
         display_idf::unlock();
         vTaskDelay(pdMS_TO_TICKS(5));   // the Arduino loop's own 5 ms pace
@@ -132,26 +147,64 @@ static void input_task(void *) {
 }
 
 extern "C" void app_main(void) {
-    ESP_LOGI(TAG, "The Orb OS, ESP-IDF bring-up (stage 2)");
-    ESP_LOGI(TAG, "PSRAM free %u KB, internal free %u KB",
-             (unsigned)(heap_caps_get_free_size(MALLOC_CAP_SPIRAM) / 1024),
-             (unsigned)(heap_caps_get_free_size(MALLOC_CAP_INTERNAL) / 1024));
+#if CONFIG_ORB_BRINGUP_PAGE
+    bringup_run();
+    return;
+#endif
+    printf("\nThe Orb OS boot (ESP-IDF)\n");
+    psram_mark("boot start");
 
-    if (!display::begin()) {
-        ESP_LOGE(TAG, "display did not come up; knob still starts so the log shows it");
-    } else {
-        display::setBrightness(BRIGHTNESS_DEFAULT);
-        display_idf::lock();
-        build_bringup_screen();
-        display_idf::unlock();
-    }
+    // Settings first: everything below reads them. Never erases (orb_prefs.h).
+    orb_prefs::begin();
+    orb_prefs::getString("tz", s_tz, sizeof(s_tz), TZ_STR);
+    s_brightness = (int)orb_prefs::getInt("bright", BRIGHTNESS_DEFAULT);
+    setenv("TZ", s_tz, 1); tzset();
 
+    sdcard::begin();
+    psram_mark("after sdcard");
+
+    // src/main.cpp: loadSettings(), app_theme::init(), theme_select::init(),
+    // applyThemeSettings(), theme_art::begin().
+    app_theme::init();
+    theme_select::init();
+    apply_theme_clock();
+    theme_art::begin();
+    printf("[theme] wearing '%s'\n", theme_select::activeSlug()[0] ? theme_select::activeSlug() : "(stock)");
+    psram_mark("after theme");
+
+    if (!display::begin()) ESP_LOGE(TAG, "display did not come up");
+    display::setBrightness((uint8_t)s_brightness);
+
+    display_idf::lock();
+    // On Arduino display::begin() builds the radar UI itself; here it is a separate step.
+    ui_create();
+    ui_splash_show();
+    theme_font::begin();
+    lv_obj_t *radarScreen = lv_scr_act();
+    psram_mark("after display+radar");
+
+    clockview::init();
+    psram_mark("after clockview");
+    // Slot order is app_shell::Slot's: Clock, then Flight Tracker. Headlines and Settings
+    // come after them and are not ported yet, so nothing registers in their places.
+    app_shell::add(clockview::screen(), theme_style::names().clock, nullptr, nullptr, false,
+                   clockview::onEnter, clockview::onExit, !theme_style::apps().clock);
+    app_shell::add(radarScreen, theme_style::names().flight, flight_press, flight_turn, false,
+                   flight_enter, flight_exit, !theme_style::apps().flight);
     knob::begin();
-    // Core 1 with LVGL, as the Arduino loop() ran: input and rendering share a core, and
-    // core 0 stays free for the network stack when it arrives.
-    xTaskCreatePinnedToCore(input_task, "input", 4096, nullptr, 5, nullptr, 1);
+    app_shell::begin();
+    psram_mark("after app_shell::begin");
+    display_idf::unlock();
 
-    ESP_LOGI(TAG, "internal free after bring-up %u KB, largest block %u KB",
-             (unsigned)(heap_caps_get_free_size(MALLOC_CAP_INTERNAL) / 1024),
-             (unsigned)(heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL) / 1024));
+    // src/main.cpp: rtc_begin(), rtc_seed_clock(), clock_wind::begin().
+    rtc_begin();
+    rtc_seed_clock();
+    clock_wind::begin();
+
+    // Core 1 with LVGL, as Arduino's loop() ran; core 0 stays free for the network.
+    xTaskCreatePinnedToCore(app_loop, "app", 8192, nullptr, 5, nullptr, 1);
+
+    printf("setup done (firmware %s, ESP-IDF stage 2)\n", FW_VERSION);
+    printf("not ported yet: WiFi and the aircraft feed, NTP, Headlines, Settings, audio (ES8311),\n"
+           "  IMU and battery, baked theme art from flash, idle dimming, the web server\n");
 }

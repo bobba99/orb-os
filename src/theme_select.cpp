@@ -10,6 +10,9 @@
 #include "sdcard.h"
 #elif defined(ESP_PLATFORM)   // pure ESP-IDF: see orb_platform.h
 #include "orb_platform.h"
+#include "orb_prefs.h"
+#include "sdcard.h"
+#include <sys/stat.h>
 #include <cstdio>
 #include <string>
 #include <dirent.h>
@@ -30,7 +33,13 @@ void (*s_restartHook)() = nullptr;
 // Same reasoning as app_theme.cpp's NATIVE_THEME_FILE: a re-exec starts a fresh
 // process, so the chosen slug has to survive it in a file, not just in RAM.
 const char *NATIVE_SLUG_FILE = "/tmp/orb_sim_theme_slug";
+#if defined(ESP_PLATFORM)
+// Pure ESP-IDF reads the card through the same POSIX calls as the simulator, at the place
+// components/orb_sdcard mounts it. The slug lives in NVS there, as on Arduino.
+const char *SIM_SD_ROOT      = ORB_SD_ROOT;
+#else
 const char *SIM_SD_ROOT      = "sim/sdcard";   // same stand-in root as theme_sd/roads_sd
+#endif
 #endif
 
 } // namespace
@@ -45,6 +54,8 @@ void init() {
     p.end();
     strncpy(s_slug, s.c_str(), sizeof(s_slug) - 1);
     s_slug[sizeof(s_slug) - 1] = 0;
+#elif defined(ESP_PLATFORM)
+    orb_prefs::getString("themeSlug", s_slug, sizeof(s_slug));   // the same key, in NVS
 #else
     if (FILE *f = fopen(NATIVE_SLUG_FILE, "r")) {
         if (fgets(s_slug, sizeof(s_slug), f)) {
@@ -74,6 +85,16 @@ void init() {
         snprintf(dirPath, sizeof(dirPath), "/themes/%s", s_slug);
         snprintf(markerPath, sizeof(markerPath), "/themes/%s/_installed", s_slug);
         if (SD.exists(dirPath) && !SD.exists(markerPath)) {
+            Serial.printf("[theme] '%s' is only part installed; not wearing it\n", s_slug);
+            s_slug[0] = 0;
+            disowned = true;
+        }
+    }
+#elif defined(ESP_PLATFORM)
+    if (s_slug[0] && sdcard::mounted()) {
+        const std::string dirPath = std::string(SIM_SD_ROOT) + "/themes/" + s_slug;
+        struct stat st;
+        if (stat(dirPath.c_str(), &st) == 0 && stat((dirPath + "/_installed").c_str(), &st) != 0) {
             Serial.printf("[theme] '%s' is only part installed; not wearing it\n", s_slug);
             s_slug[0] = 0;
             disowned = true;
@@ -111,6 +132,10 @@ void init() {
             }
             Serial.printf("[theme] %s; wearing '%s' from the card\n",
                           disowned ? "that theme is mid-install" : "nothing chosen", s_slug);
+#elif defined(ESP_PLATFORM)
+            if (!disowned) orb_prefs::putString("themeSlug", s_slug);   // same rule as above
+            Serial.printf("[theme] %s; wearing '%s' from the card\n",
+                          disowned ? "that theme is mid-install" : "nothing chosen", s_slug);
 #endif
         }
     }
@@ -133,6 +158,10 @@ void set(const char *slug) {
     p.end();
     delay(700);       // hold the "restarting..." notice on screen long enough to actually read
     ESP.restart();    // reboot into the new theme — see theme_select.h
+#elif defined(ESP_PLATFORM)
+    orb_prefs::putString("themeSlug", slug);
+    delay(700);       // as above
+    ESP.restart();
 #else
     strncpy(s_slug, slug, sizeof(s_slug) - 1);
     s_slug[sizeof(s_slug) - 1] = 0;

@@ -58,4 +58,8 @@ struct OrbEsp {
 };
 static const OrbEsp ESP;
 
+// Where components/orb_sdcard mounts the card. The shared code's POSIX file paths, which the
+// simulator roots at "sim/sdcard", are rooted here on the device.
+#define ORB_SD_ROOT "/sdcard"
+
 #endif
