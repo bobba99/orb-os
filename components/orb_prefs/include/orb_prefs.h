@@ -12,8 +12,8 @@
 //     begin() says so and every read returns its default; nothing is ever written or wiped.
 //
 // Values are stored with Arduino Preferences' encodings (int as i32, uint as u32, a 64-bit
-// int as i64, bool as u8, string as an NVS string), so either firmware can be flashed over
-// the other and find what the other saved.
+// int as i64, bool as u8, string as an NVS string, float and double as blobs of their own
+// size), so either firmware can be flashed over the other and find what the other saved.
 #pragma once
 #include <stddef.h>
 #include <stdint.h>
@@ -29,6 +29,8 @@ bool     getString(const char *key, char *out, size_t outLen, const char *def = 
 int32_t  getInt(const char *key, int32_t def);
 uint32_t getUInt(const char *key, uint32_t def);
 int64_t  getInt64(const char *key, int64_t def);   // Arduino putLong64 / getLong64
+float    getFloat(const char *key, float def);       // Arduino putFloat: a 4-byte blob
+double   getDouble(const char *key, double def);     // Arduino putDouble: an 8-byte blob
 bool     getBool(const char *key, bool def);
 bool     isKey(const char *key);
 
@@ -37,6 +39,8 @@ bool putString(const char *key, const char *value);
 bool putInt(const char *key, int32_t value);
 bool putUInt(const char *key, uint32_t value);
 bool putInt64(const char *key, int64_t value);
+bool putFloat(const char *key, float value);
+bool putDouble(const char *key, double value);
 bool putBool(const char *key, bool value);
 bool remove(const char *key);
 

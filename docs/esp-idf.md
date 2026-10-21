@@ -47,7 +47,7 @@ place of their own.
 | Settings in NVS, same keys as Arduino, never erases | Most settings: only theme, app skin, wind, tz, brightness, place name are read |
 | RTC seeds the clock at boot | NTP, writing NTP time back to the RTC |
 | Clock and Flight Tracker apps, theme, splash | Headlines, Settings, the web server |
-| | WiFi and the aircraft feed, so the scope says "No WiFi" |
+| WiFi on the stored network, reconnecting with backoff; NTP; the aircraft feed over verified HTTPS | The setup portal, joining or saving a new network (stage 3) |
 | | Audio (a stub reporting no codec), IMU, battery, idle dimming |
 | Baked theme art and fonts, read from the themeart partition | Baking: a theme installed or changed is not re-baked yet |
 
@@ -133,13 +133,31 @@ Ctrl+] leaves the monitor. The port name is the one PlatformIO auto-detects. Orb
 - It writes the bootloader, the partition table and the app. The partition table is the
   Arduino build's own `partitions_16MB_themeart.csv`, read directly rather than copied, so
   `nvs` keeps its offset and size and the WiFi network the Arduino firmware saved survives.
-- The firmware opens NVS only through `components/orb_prefs`, which uses the namespace
+- The firmware's own settings go only through `components/orb_prefs`, which uses the namespace
   `capsuleradar` and nothing else and never erases the partition, even when ESP-IDF reports
   it needs to. It reads and writes the same keys as the Arduino firmware, with the same
-  encodings, so either firmware can be flashed over the other. It never touches the WiFi
-  driver's own namespace.
+  encodings, so either firmware can be flashed over the other. The WiFi driver reads the
+  saved network from its own namespace and is switched to RAM-only storage straight after
+  (`components/orb_wifi`), so this firmware can never overwrite it. ESP-IDF's radio driver
+  does keep its calibration in an NVS namespace of its own (`phy`), as Arduino-ESP32 does.
 - The SD card is never formatted, even if it will not mount.
 - Going back is one Arduino flash: `pio run -e esp32-s3-amoled-175 -t upload`.
+
+## Working away from the Orb's network
+
+The Orb joins the network it has saved. To test somewhere else, put that network in a
+git-ignored `sdkconfig.dev` and build it in its own folder:
+
+```bash
+printf 'CONFIG_ORB_DEV_WIFI_SSID="name"\nCONFIG_ORB_DEV_WIFI_PASS="password"\n' > sdkconfig.dev
+idf.py -B build-dev -D SDKCONFIG=build-dev/sdkconfig -D SDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.dev" -p /dev/cu.usbmodem21101 flash
+```
+
+That network is joined in RAM only; the saved one is untouched and comes back with the next
+ordinary build. The radio is 2.4 GHz only, so a 5 GHz-only network can never be joined, and the
+boot log lists every network the scan heard when the wanted one is not among them.
+`CONFIG_ORB_WIFI_COUNTRY` (default `01`, channels 1 to 11) can open channels 12 and 13 where
+they are allowed, for example `NO`.
 
 ## Configuration
 

@@ -44,6 +44,10 @@ CONFIG_MBEDTLS_CERTIFICATE_BUNDLE_DEFAULT_FULL=y
 # flash encryption on, and this device does not have it.
 CONFIG_MBEDTLS_DEFAULT_MEM_ALLOC=y
 
+# --- Time ------------------------------------------------------------------------------
+# Two NTP servers, as configTzTime() had on Arduino (components/orb_wifi). The default is one.
+CONFIG_LWIP_SNTP_MAX_SERVERS=2
+
 # --- microSD -------------------------------------------------------------------------
 # Long file names. Every theme file is longer than 8.3 ("clock_style.json"), and without this
 # FAT can see the folder and none of the files in it.

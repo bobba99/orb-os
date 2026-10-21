@@ -8,11 +8,11 @@
 #
 # The list is the clock's and the flight tracker's: stage 2's exit criterion. Hardware
 # drivers are not here (display, knob, sdcard, audio and diag_log have ESP-IDF versions in
-# their own components), and neither is anything that talks to the network yet.
+# their own components). adsb_client fetches through orb_http on ESP-IDF.
 set(ORB_SRC "${CMAKE_CURRENT_LIST_DIR}/../../src")
 set(SHARED
     app_shell.cpp app_theme.cpp input_router.cpp knob_help.cpp update_ui.cpp
-    clock_view.cpp clock_wind.cpp wind_notice.cpp
+    clock_view.cpp clock_wind.cpp wind_notice.cpp adsb_client.cpp
     radar_view.cpp ui.cpp radar_sprite.cpp coastline.cpp airports.cpp roads_sd.cpp
     route.cpp photo.cpp weather.cpp wx_radar.cpp cloud_image.cpp intel.cpp
     theme_style.cpp theme_select.cpp theme_sd.cpp theme_art.cpp theme_font.cpp theme_audio.cpp
@@ -25,7 +25,8 @@ set(SHARED
 list(TRANSFORM SHARED PREPEND "${ORB_SRC}/")
 idf_component_register(SRCS ${SHARED}
                        REQUIRES orb_shared lvgl
-                       PRIV_REQUIRES pngdec orb_prefs orb_sdcard orb_audio esp_timer esp_partition spi_flash)
+                       PRIV_REQUIRES pngdec orb_prefs orb_sdcard orb_audio orb_http orb_wifi esp_timer
+                                    esp_partition spi_flash)
 # The shared files are held to the warning policy of the builds they came from, where a
 # warning is reported and not fatal. They are compiled with every warning on and looked at;
 # a real defect found that way is fixed in src/, and these flags only stop a style warning

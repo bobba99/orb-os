@@ -76,6 +76,18 @@ int64_t orb_prefs::getInt64(const char *key, int64_t def) {
     return v;
 }
 
+// Arduino stores a float or a double as a blob of exactly its size. Anything else under that
+// key (another type, a different length) is not that value, so it reads as the default.
+template <typename T> static T get_blob(const char *key, T def) {
+    Handle r(false);
+    T v = def;
+    size_t n = sizeof(T);
+    if (!r.open || nvs_get_blob(r.h, key, &v, &n) != ESP_OK || n != sizeof(T)) return def;
+    return v;
+}
+float  orb_prefs::getFloat(const char *key, float def)   { return get_blob(key, def); }
+double orb_prefs::getDouble(const char *key, double def) { return get_blob(key, def); }
+
 bool orb_prefs::getBool(const char *key, bool def) {
     Handle r(false);
     uint8_t v = def ? 1 : 0;
@@ -107,6 +119,16 @@ bool orb_prefs::putUInt(const char *key, uint32_t value) {
 bool orb_prefs::putInt64(const char *key, int64_t value) {
     Handle w(true);
     return w.open && commit(w, nvs_set_i64(w.h, key, value), key);
+}
+
+bool orb_prefs::putFloat(const char *key, float value) {
+    Handle w(true);
+    return w.open && commit(w, nvs_set_blob(w.h, key, &value, sizeof(value)), key);
+}
+
+bool orb_prefs::putDouble(const char *key, double value) {
+    Handle w(true);
+    return w.open && commit(w, nvs_set_blob(w.h, key, &value, sizeof(value)), key);
 }
 
 bool orb_prefs::putBool(const char *key, bool value) {

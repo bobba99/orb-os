@@ -24,6 +24,7 @@ secrets.h
 # managed_components/ is downloaded from the lock.
 managed_components/
 build-bringup/
+build-dev/
 sdkconfig
 sdkconfig.old
 .dummy/
@@ -48,3 +49,6 @@ orb_watch.pid
 # contents is ~26 MB of PNG and PCM that would otherwise land in a commit via `git add .`.
 themes/*.orb
 themes/unpacked/
+
+# A development network for testing away from the Orb's saved one (main/Kconfig.projbuild).
+sdkconfig.dev
