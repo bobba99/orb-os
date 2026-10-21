@@ -1,6 +1,6 @@
 #include "theme_audio.h"
 
-#ifdef ARDUINO
+#if defined(ARDUINO) || defined(ESP_PLATFORM)   // ESP-IDF: components/orb_audio implements audio.h
 #include "audio.h"
 #else
 // The simulator builds no audio module, so nothing can be playing and nothing needs releasing
@@ -13,6 +13,8 @@
 
 #ifdef ARDUINO
 #include <Arduino.h>
+#elif defined(ESP_PLATFORM)   // pure ESP-IDF: see orb_platform.h
+#include "orb_platform.h"
 #endif
 
 #include <stdio.h>

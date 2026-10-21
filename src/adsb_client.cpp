@@ -4,18 +4,35 @@
 // Memory safety (important on the ESP32): we parse straight from the HTTP stream
 // (no full-body String), use an ArduinoJson field filter so only the ~12 fields we
 // need are kept. The nearest ADSB_MAX_AIRCRAFT contacts are retained for display.
+//
+// Two transports, one parse. The Arduino firmware streams the body through HTTPClient; pure
+// ESP-IDF (stage 2 of REWRITE_PLAN.md) fetches it whole into PSRAM through orb_http, with
+// certificates verified. Everything from the parsed document onwards is shared.
 #include "adsb_client.h"
 #include "config.h"
 #include "geo.h"           // haversineKm — keep the nearest N aircraft
+#ifdef ARDUINO
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
-#include <ArduinoJson.h>   // v7
 #include <StreamUtils.h>
+#else   // pure ESP-IDF
+#include "orb_platform.h"
+#include "orb_http.h"
+#include "orb_wifi.h"
+#include <ctype.h>
+#endif
+#include <ArduinoJson.h>   // v7
 #include <esp_heap_caps.h>
 #include <algorithm>
 
-#if !ADSB_HTTPS_INSECURE
+#ifdef ARDUINO
+static bool net_up() { return WiFi.status() == WL_CONNECTED; }
+#else
+static bool net_up() { return orb_wifi::connected(); }
+#endif
+
+#if defined(ARDUINO) && !ADSB_HTTPS_INSECURE
 extern const uint8_t rootBundleStart[] asm("_binary_x509_crt_bundle_start");
 extern const uint8_t rootBundleEnd[] asm("_binary_x509_crt_bundle_end");
 #endif
@@ -30,6 +47,7 @@ struct PsramJsonAllocator : ArduinoJson::Allocator {
 };
 static PsramJsonAllocator s_jsonPsram;
 
+#ifdef ARDUINO
 // NetworkClient::readBytes() treats a transient negative TLS read as end-of-input,
 // which makes ArduinoJson intermittently report IncompleteInput. Deliberately wrap
 // the client without overriding readBytes(): Stream's timed byte reader retries
@@ -94,6 +112,7 @@ private:
     Stream& _source;
     size_t _bytesRead = 0;
 };
+#endif  // ARDUINO
 
 void AdsbClient::begin(double homeLat, double homeLon, float rangeKm) {
     _lat = homeLat; _lon = homeLon; _rangeKm = rangeKm;
@@ -111,7 +130,7 @@ bool ready(uint32_t until) {
 }
 
 bool AdsbClient::poll(std::vector<Aircraft>& out) {
-    if (WiFi.status() != WL_CONNECTED) return false;
+    if (!net_up()) return false;
     _refused = false;
     _lastStatus = 0;
     _refusedStatus = 0;
@@ -152,6 +171,19 @@ bool AdsbClient::fetchFrom(uint8_t provider, std::vector<Aircraft>& out) {
     else
         snprintf(url, sizeof(url), "https://%s/api/v3/lat/%.4f/lon/%.4f/dist/%.0f", host, _lat, _lon, nm);
 
+    // Only keep the fields we use -> much smaller parsed document.
+    JsonDocument filter(&s_jsonPsram);
+    const char* keys[] = { "ac", "aircraft" };
+    const char* flds[] = { "hex", "flight", "t", "lat", "lon", "alt_baro",
+                           "track", "true_heading", "gs", "baro_rate",
+                           "squawk", "seen_pos", "dbFlags" };
+    for (const char* k : keys)
+        for (const char* f : flds)
+            filter[k][0][f] = true;
+
+    JsonDocument doc(&s_jsonPsram);
+
+#ifdef ARDUINO
     // Keep only one TLS connection alive at a time, and release its PSRAM before
     // the weather/photo clients run on this same task. No IP pinning: connecting
     // by hostname also supplies the correct TLS SNI name.
@@ -194,17 +226,6 @@ bool AdsbClient::fetchFrom(uint8_t provider, std::vector<Aircraft>& out) {
         return false;
     }
 
-    // Only keep the fields we use -> much smaller parsed document.
-    JsonDocument filter(&s_jsonPsram);
-    const char* keys[] = { "ac", "aircraft" };
-    const char* flds[] = { "hex", "flight", "t", "lat", "lon", "alt_baro",
-                           "track", "true_heading", "gs", "baro_rate",
-                           "squawk", "seen_pos", "dbFlags" };
-    for (const char* k : keys)
-        for (const char* f : flds)
-            filter[k][0][f] = true;
-
-    JsonDocument doc(&s_jsonPsram);
     ReliableJsonStream jsonStream(http.getStream());
     ChunkDecodingStream decoded(jsonStream);
     Stream &body = http.header("Transfer-Encoding").equalsIgnoreCase("chunked")
@@ -220,6 +241,35 @@ bool AdsbClient::fetchFrom(uint8_t provider, std::vector<Aircraft>& out) {
         _lastStatus = -2;
         return false;
     }
+#else   // pure ESP-IDF
+    // One request on orb_http: certificates verified against ESP-IDF's bundle, the whole
+    // body fetched into PSRAM (chunked or not; esp_http_client decodes it), then parsed.
+    orb_http::Request req;
+    req.url = url;
+    req.userAgent = ADSB_USER_AGENT;
+    req.accept = "application/json";
+    req.connectTimeoutMs = ADSB_CONNECT_MS;
+    req.readTimeoutMs = ADSB_READ_MS;
+    uint8_t *raw = nullptr;
+    size_t rawLen = 0;
+    const int code = orb_http::get(req, &raw, &rawLen);
+    _lastStatus = code;
+    _providerStatus[provider] = code;
+    Serial.printf("[adsb] HTTPS %s -> %d internal_largest=%u psram_free=%u psram_largest=%u\n",
+                  host, code,
+                  (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT),
+                  (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM),
+                  (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM));
+    if (code != 200) return false;
+    DeserializationError err = deserializeJson(doc, (const char *)raw, rawLen,
+                                               DeserializationOption::Filter(filter));
+    orb_http::release(raw);
+    if (err) {
+        Serial.printf("[adsb] %s parse failed: %s; read=%u\n", host, err.c_str(), (unsigned)rawLen);
+        _lastStatus = -2;
+        return false;
+    }
+#endif
 
     JsonArrayConst arr = doc["ac"].as<JsonArrayConst>();
     if (arr.isNull()) arr = doc["aircraft"].as<JsonArrayConst>();
@@ -267,7 +317,13 @@ bool AdsbClient::fetchFrom(uint8_t provider, std::vector<Aircraft>& out) {
         Aircraft ac;
         ac.hex = (const char*)(a["hex"] | "");
         if (ac.hex.length() == 0) continue;
-        ac.flight = String((const char*)(a["flight"] | "")); ac.flight.trim();
+        ac.flight = String((const char*)(a["flight"] | ""));
+#ifdef ARDUINO
+        ac.flight.trim();
+#else   // String is std::string off Arduino (aircraft.h): trim the same whitespace by hand
+        while (!ac.flight.empty() && isspace((unsigned char)ac.flight.back())) ac.flight.pop_back();
+        while (!ac.flight.empty() && isspace((unsigned char)ac.flight.front())) ac.flight.erase(0, 1);
+#endif
         ac.type   = (const char*)(a["t"] | "");
         ac.lat = lat; ac.lon = lon;
         ac.onGround = onGround;

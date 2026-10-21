@@ -18,10 +18,15 @@ dist/
 # Secrets (WiFi creds live in NVS on the device, never in the repo)
 secrets.h
 
-# ESP-IDF component manager (unused; project builds via PlatformIO)
-CMakeLists.txt
-dependencies.lock
+# ESP-IDF (stage 2 of REWRITE_PLAN.md). CMakeLists.txt and dependencies.lock ARE source
+# now: the lock file is what pins every managed component to an exact version. What the
+# build generates is not: the full sdkconfig is derived from sdkconfig.defaults, and
+# managed_components/ is downloaded from the lock.
 managed_components/
+build-bringup/
+build-dev/
+sdkconfig
+sdkconfig.old
 .dummy/
 
 # Generated staging trees, not source
@@ -44,3 +49,6 @@ orb_watch.pid
 # contents is ~26 MB of PNG and PCM that would otherwise land in a commit via `git add .`.
 themes/*.orb
 themes/unpacked/
+
+# A development network for testing away from the Orb's saved one (main/Kconfig.projbuild).
+sdkconfig.dev

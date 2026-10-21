@@ -10,6 +10,8 @@
 #include <new>          // std::nothrow — a failed handle alloc must not throw into LVGL
 #ifdef ARDUINO
 #include <Arduino.h>
+#elif defined(ESP_PLATFORM)   // pure ESP-IDF: see orb_platform.h
+#include "orb_platform.h"
 #endif
 
 namespace theme_font {
@@ -180,7 +182,7 @@ void begin() {
         snprintf(path, sizeof(path), "%c:%s", DRIVE_LETTER, SLOT_FILE[i]);
         const lv_font_t *f = lv_font_load(path);
         if (!f) {
-#ifdef ARDUINO
+#if defined(ARDUINO) || defined(ESP_PLATFORM)
             Serial.printf("[theme_font] %s failed to parse — using the compiled font\n", SLOT_FILE[i]);
 #endif
             continue;
@@ -188,7 +190,7 @@ void begin() {
         s_font[i] = f;
         ++s_loaded;
     }
-#ifdef ARDUINO
+#if defined(ARDUINO) || defined(ESP_PLATFORM)   // the simulator never loads any: no partition
     Serial.printf("[theme_font] %d of %d slots loaded from the theme\n", s_loaded, (int)S_COUNT);
 #endif
 }

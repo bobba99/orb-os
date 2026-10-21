@@ -1,0 +1,66 @@
+# The Orb OS — ESP-IDF configuration. Only what differs from ESP-IDF's defaults.
+# The generated sdkconfig is not committed; delete it to rebuild from this file.
+
+# --- Chip, flash, partitions -------------------------------------------------------
+CONFIG_IDF_TARGET="esp32s3"
+CONFIG_ESPTOOLPY_FLASHMODE_QIO=y
+CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
+# The Arduino build's table, shared rather than copied: nvs must keep its offset and size
+# byte for byte or every saved WiFi network is lost on the first flash of this firmware.
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions_16MB_themeart.csv"
+CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240=y
+CONFIG_COMPILER_OPTIMIZATION_PERF=y
+
+# --- PSRAM: ESP32-S3R8, octal ------------------------------------------------------
+CONFIG_SPIRAM=y
+CONFIG_SPIRAM_MODE_OCT=y
+CONFIG_SPIRAM_SPEED_80M=y
+CONFIG_SPIRAM_USE_MALLOC=y
+# Ordinary allocations of 512 bytes and up go to PSRAM, as heap_caps_malloc_extmem_enable(512)
+# did on Arduino since 2.16.65. Internal RAM is what this device runs out of.
+CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=512
+CONFIG_SPIRAM_TRY_ALLOCATE_WIFI_LWIP=y
+
+# --- Console: the board's USB port is the chip's USB-Serial/JTAG -------------------
+CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
+
+# --- FreeRTOS ----------------------------------------------------------------------
+# 1 kHz, as Arduino had it, so a 1 ms delay is 1 ms.
+CONFIG_FREERTOS_HZ=1000
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
+
+# --- TLS -----------------------------------------------------------------------------
+# The Arduino build could not tune these (prebuilt libraries), and TLS running out of
+# internal RAM (-32512) was the result. Buffers sized to the record actually received,
+# freed between records, and verified against the bundled root certificates.
+CONFIG_MBEDTLS_DYNAMIC_BUFFER=y
+CONFIG_MBEDTLS_ASYMMETRIC_CONTENT_LEN=y
+CONFIG_MBEDTLS_CERTIFICATE_BUNDLE=y
+CONFIG_MBEDTLS_CERTIFICATE_BUNDLE_DEFAULT_FULL=y
+# PSRAM where safe: "default" follows malloc(), so with the 512-byte rule above the record
+# buffers land in PSRAM and the small, short-lived allocations stay internal. Not "external
+# only", which would also put key material in PSRAM; ESP-IDF calls that safe only with
+# flash encryption on, and this device does not have it.
+CONFIG_MBEDTLS_DEFAULT_MEM_ALLOC=y
+
+# --- Time ------------------------------------------------------------------------------
+# Two NTP servers, as configTzTime() had on Arduino (components/orb_wifi). The default is one.
+CONFIG_LWIP_SNTP_MAX_SERVERS=2
+
+# --- microSD -------------------------------------------------------------------------
+# Long file names. Every theme file is longer than 8.3 ("clock_style.json"), and without this
+# FAT can see the folder and none of the files in it.
+CONFIG_FATFS_LFN_HEAP=y
+CONFIG_FATFS_MAX_LFN=255
+
+# --- Knob ----------------------------------------------------------------------------
+# The detent and rock logic runs in the PCNT and GPIO interrupt handlers, which must keep
+# working while flash is busy (an SD read, an NVS write).
+CONFIG_PCNT_ISR_IRAM_SAFE=y
+CONFIG_GPIO_CTRL_FUNC_IN_IRAM=y
+
+# --- LVGL 8 --------------------------------------------------------------------------
+# Not configured here. LVGL reads include/lv_conf.h, the same file the Arduino build and
+# the simulator use, with Kconfig switched off (see the root CMakeLists.txt). Colour stays
+# unswapped there because baked theme art is stored that way; the display flush swaps.

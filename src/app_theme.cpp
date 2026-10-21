@@ -2,6 +2,10 @@
 #ifdef ARDUINO
 #include <Arduino.h>
 #include <Preferences.h>
+#elif defined(ESP_PLATFORM)   // pure ESP-IDF: see orb_platform.h
+#include "orb_platform.h"
+#include "orb_prefs.h"
+#include <cstdio>
 #else
 #include <cstdio>
 #endif
@@ -59,6 +63,8 @@ void init() {
     p.begin("capsuleradar", true);   // read-only
     s_theme = p.getInt("appTheme", APP_THEME_DEFAULT);
     p.end();
+#elif defined(ESP_PLATFORM)
+    s_theme = (int)orb_prefs::getInt("appTheme", APP_THEME_DEFAULT);   // same key, in NVS
 #else
     if (FILE *f = fopen(NATIVE_THEME_FILE, "r")) {
         if (fscanf(f, "%d", &s_theme) != 1) s_theme = APP_THEME_DEFAULT;
@@ -87,6 +93,10 @@ void set(int t) {
     p.end();
     delay(700);       // hold the "restarting..." notice on screen long enough to actually read
     ESP.restart();    // reboot into the new theme — see app_theme.h
+#elif defined(ESP_PLATFORM)
+    orb_prefs::putInt("appTheme", t);
+    delay(700);       // as above
+    ESP.restart();
 #else
     s_theme = t;
     if (FILE *f = fopen(NATIVE_THEME_FILE, "w")) { fprintf(f, "%d\n", t); fclose(f); }

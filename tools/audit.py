@@ -37,10 +37,15 @@ def read(path):
         return ""
 
 
+# Keyed by path relative to src/, so src/net/wifi.cpp is "net/wifi.cpp". A flat listdir
+# here would silently skip every subfolder, and each check below would pass on code it
+# never read.
 fw_src = {}
-for name in os.listdir(os.path.join(FW, "src")):
-    if name.endswith((".cpp", ".h")):
-        fw_src[name] = read(os.path.join(FW, "src", name))
+for root, _dirs, names in os.walk(os.path.join(FW, "src")):
+    for name in names:
+        if name.endswith((".cpp", ".h")):
+            path = os.path.join(root, name)
+            fw_src[os.path.relpath(path, os.path.join(FW, "src"))] = read(path)
 
 style_h = fw_src.get("theme_style.h", "")
 style_cpp = fw_src.get("theme_style.cpp", "")
@@ -165,9 +170,9 @@ print("    artwork step, so a plate the device decodes was never decoded there.\
 
 # The device's top level is main.cpp plus the orb_*.cpp files it was split into (stage 1
 # of REWRITE_PLAN.md). Reading main.cpp alone would go blind to the entry hooks below,
-# which now live in orb_apps.cpp, and report "ok" for a simulator that skipped them.
-DEVICE_TOP = ("main.cpp", "orb_state.cpp", "orb_net_task.cpp", "orb_storage.cpp",
-              "orb_location.cpp", "orb_wifi.cpp", "orb_web.cpp", "orb_apps.cpp", "orb_stats.cpp")
+# which now live in app_hooks.cpp, and report "ok" for a simulator that skipped them.
+DEVICE_TOP = ("main.cpp", "shared_state.cpp", "net/net_task.cpp", "storage.cpp",
+              "location.cpp", "net/wifi.cpp", "net/http.cpp", "web_server.cpp", "app_hooks.cpp", "diagnostics.cpp")
 main_cpp = "".join(fw_src.get(k, "") for k in DEVICE_TOP)
 sim_cpp = fw_src.get("sim_main.cpp", "")
 main_apps = re.findall(r"app_shell::add\(([^,]+),\s*theme_style::names\(\)\.(\w+)", main_cpp)

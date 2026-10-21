@@ -1,8 +1,14 @@
 #include "theme_art.h"
 #include <string.h>
 
+// The device implementation, on either firmware. It is ESP-IDF's partition API throughout;
+// Serial is the only Arduino name in it, and pure ESP-IDF gets that from orb_platform.h.
+#if defined(ARDUINO) || defined(ESP_PLATFORM)
 #ifdef ARDUINO
 #include <Arduino.h>
+#else
+#include "orb_platform.h"
+#endif
 #include <esp_partition.h>
 #include <esp_spi_flash.h>
 #include "theme_select.h"   // activeSlug() — find_active()'s implicit first argument

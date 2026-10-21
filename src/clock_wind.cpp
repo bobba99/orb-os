@@ -4,6 +4,9 @@
 #ifdef ARDUINO
 #include <Arduino.h>
 #include <Preferences.h>
+#elif defined(ESP_PLATFORM)   // pure ESP-IDF: see orb_platform.h
+#include "orb_platform.h"
+#include "orb_prefs.h"
 #endif
 
 namespace {
@@ -48,6 +51,8 @@ void save() {
     if (!p.begin(NVS_NS, false)) return;
     p.putLong64(NVS_KEY, (int64_t)s_woundUntil);
     p.end();
+#elif defined(ESP_PLATFORM)
+    orb_prefs::putInt64("windUntil", (int64_t)s_woundUntil);   // the same key, as an i64
 #endif
 }
 
@@ -60,6 +65,9 @@ void clock_wind::begin() {
         s_woundUntil = p.getLong64(NVS_KEY, 0);
         p.end();
     }
+    Serial.printf("[wind] stored wind runs to %lld\n", (long long)s_woundUntil);
+#elif defined(ESP_PLATFORM)
+    s_woundUntil = orb_prefs::getInt64("windUntil", 0);
     Serial.printf("[wind] stored wind runs to %lld\n", (long long)s_woundUntil);
 #endif
 }

@@ -70,10 +70,15 @@
 /* On the device, drive LVGL's tick from Arduino's millis() — no separate ticker.
    On the native SDL simulator there is no Arduino.h, so fall back to lv_tick_inc()
    (called from the sim main loop). */
-#if defined(ARDUINO) || defined(ESP_PLATFORM)
+#if defined(ARDUINO)
 #  define LV_TICK_CUSTOM 1
 #  define LV_TICK_CUSTOM_INCLUDE "Arduino.h"
 #  define LV_TICK_CUSTOM_SYS_TIME_EXPR (millis())
+#elif defined(ESP_PLATFORM)
+/* Pure ESP-IDF (stage 2 of REWRITE_PLAN.md): esp_lvgl_port drives the tick with
+   lv_tick_inc() from an esp_timer, which LVGL 8 only declares without a custom tick. The
+   display component runs that timer at 1 ms, the resolution millis() gave on Arduino. */
+#  define LV_TICK_CUSTOM 0
 #else
 #  define LV_TICK_CUSTOM 0
 #endif

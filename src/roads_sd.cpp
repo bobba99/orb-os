@@ -11,6 +11,11 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>
 #include "sdcard.h"
+#elif defined(ESP_PLATFORM)   // pure ESP-IDF: see orb_platform.h
+#include "orb_platform.h"
+#include <esp_heap_caps.h>
+#include <string>
+#include <chrono>
 #else
 #include <string>
 #include <chrono>

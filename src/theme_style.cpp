@@ -17,6 +17,8 @@ static struct {
         va_list a; va_start(a, fmt); vprintf(fmt, a); va_end(a);
     }
 } Serial;
+#elif !defined(ARDUINO)   // pure ESP-IDF: Serial from orb_platform.h
+#include "orb_platform.h"
 #endif
 
 // Compile-time fallback defaults (and, for a stock/no-design build, the only values
@@ -700,8 +702,10 @@ void load() {
                 if (c.bgOpa < 0)   c.bgOpa = 0;
                 if (c.bgOpa > 255) c.bgOpa = 255;
                 // Kept on the glass. A credit dragged off the edge is a credit removed.
-                if (c.x < 30) c.x = 30;  if (c.x > 436) c.x = 436;
-                if (c.y < 10) c.y = 10;  if (c.y > 450) c.y = 450;
+                if (c.x < 30)  c.x = 30;
+                if (c.x > 436) c.x = 436;
+                if (c.y < 10)  c.y = 10;
+                if (c.y > 450) c.y = 450;
             }
         }
     }

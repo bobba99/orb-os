@@ -4,6 +4,12 @@
 #include <SD.h>
 #include <esp_heap_caps.h>
 #include "sdcard.h"
+#elif defined(ESP_PLATFORM)   // pure ESP-IDF: see orb_platform.h
+#include "orb_platform.h"
+#include <esp_heap_caps.h>
+#include <cstdio>
+#include <cstdlib>
+#include <string>
 #else
 #include <cstdio>
 #include <cstdlib>
@@ -59,7 +65,11 @@ uint8_t *read_whole(const char *path, size_t &outLen, size_t maxBytes) {
 void free(uint8_t *buf) { if (buf) heap_caps_free(buf); }
 #else
 namespace {
+#if defined(ESP_PLATFORM)
+constexpr const char *SIM_SD_ROOT = ORB_SD_ROOT;    // pure ESP-IDF: the mounted card, same POSIX path
+#else
 constexpr const char *SIM_SD_ROOT = "sim/sdcard";   // same stand-in root as roads_sd
+#endif
 }
 uint8_t *read_whole(const char *path, size_t &outLen, size_t maxBytes) {
     outLen = 0;

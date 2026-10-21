@@ -1,0 +1,33 @@
+menu "The Orb OS"
+
+    config ORB_BRINGUP_PAGE
+        bool "Boot to the display and knob bring-up page instead of the apps"
+        default n
+        help
+            Shows a plain test page that exercises only the panel and the knob: a detent
+            count, an arc that follows the knob, presses, rock timing and colour swatches.
+            For the first flash of a new display or knob driver, before the apps are trusted
+            on it. Opens no SD card and no NVS.
+
+    config ORB_WIFI_COUNTRY
+        string "WiFi country code"
+        default "01"
+        help
+            Which channels the radio may scan and use. "01" is ESP-IDF's world-safe set,
+            channels 1 to 11. Most of Europe, Norway included, also allows 12 and 13, and a
+            router on one of those is invisible under "01"; set "NO", "GB", "DE"... for those.
+
+    config ORB_DEV_WIFI_SSID
+        string "Development network to join instead of the stored one"
+        default ""
+        help
+            For working on the firmware away from the network the Orb has saved. When set,
+            this network is joined instead, in RAM only: the driver's saved network is never
+            replaced, so the Orb goes back to it on the next build without this set. Put it in
+            sdkconfig.dev (git-ignored), never in sdkconfig.defaults.
+
+    config ORB_DEV_WIFI_PASS
+        string "Password for the development network (empty for an open network)"
+        default ""
+
+endmenu

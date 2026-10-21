@@ -3,14 +3,15 @@
 //
 // Everything else that used to live here is in its own file, moved without changing
 // behaviour (stage 1 of REWRITE_PLAN.md):
-//   orb_state     the globals more than one module shares
-//   orb_net_task  the core 0 networking task: ADS-B poll, weather, headlines, lookups
-//   orb_storage   settings in NVS, theme overrides, the Settings app's setters
-//   orb_location  saving a position, IP lookup, geocoding, recent cities, timezone
-//   orb_wifi      boot-time connect and portal, joins from Settings and the cable, mDNS
-//   orb_web       the web server and every route on it
-//   orb_apps      app shell hooks, alert sounds, range and weather-unit hooks
-//   orb_stats     the boot RAM ledger, /health counters, loop phase timer, [memdbg]
+//   net/wifi       boot-time connect and portal, joins from Settings and the cable, mDNS
+//   net/http       the plain-HTTP GET the location lookups share
+//   net/net_task   the core 0 networking task: ADS-B poll, weather, headlines, lookups
+//   web_server     the web server and every route on it
+//   location       saving a position, IP lookup, geocoding, recent cities, timezone
+//   storage        settings in NVS, theme overrides, the Settings app's setters
+//   app_hooks      app shell hooks, alert sounds, range and weather-unit hooks
+//   diagnostics    the boot RAM ledger, /health counters, loop phase timer, [memdbg]
+//   shared_state   the globals more than one of the above shares
 #include <Arduino.h>
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
@@ -81,14 +82,14 @@
 #include <Preferences.h>            // NVS (persist theme/settings)
 #include <time.h>                   // NTP/RTC clock + date
 #include <esp_heap_caps.h>          // heap_caps_malloc_extmem_enable(), [memdbg]
-#include "orb_state.h"              // shared globals, ORB_OTA_ENABLED
-#include "orb_net_task.h"
-#include "orb_storage.h"
-#include "orb_location.h"
-#include "orb_wifi.h"
-#include "orb_web.h"
-#include "orb_apps.h"
-#include "orb_stats.h"
+#include "shared_state.h"              // shared globals, ORB_OTA_ENABLED
+#include "net/net_task.h"
+#include "storage.h"
+#include "location.h"
+#include "net/wifi.h"
+#include "web_server.h"
+#include "app_hooks.h"
+#include "diagnostics.h"
 
 // Convert a UTC broken-down time to time_t (mktime assumes local TZ, so flip to UTC0).
 static time_t utc_to_time(struct tm *utc) {
@@ -321,7 +322,7 @@ void setup() {
     theme_font::begin();
     build_hold_warning();   // hold-to-reboot countdown, sits above every app
 
-    applyStoredDisplaySettings();   // restore the saved theme, then persist any future change (orb_storage.cpp)
+    applyStoredDisplaySettings();   // restore the saved theme, then persist any future change (storage.cpp)
     radar::setThemeChangedCb(saveTheme);
     ui_set_units(g_units);                       // apply saved unit preset
     ui_set_wx_units(host_wx_is_imperial());      // apply saved (or auto-resolved) weather units
@@ -487,7 +488,7 @@ void setup() {
     // splash says what is happening on its own status line meanwhile.
     update_ui::booting("Connecting to your network");
 
-    wifi_boot_connect(wantWifiSetup);   // captive portal or stored network; orb_wifi.cpp
+    wifi_boot_connect(wantWifiSetup);   // captive portal or stored network; net/wifi.cpp
     // UX-024, and it comes before the WiFi choice on purpose. Both are things the Orb is
     // missing, and the card is the one that needs somebody to go and find a physical
     // object, so it is the one worth saying while they are still standing at the desk.
@@ -547,7 +548,7 @@ void setup() {
     // justifying the size. 8 KB keeps roughly double the observed peak as margin and returns
     // 8 KB of internal RAM, which is the exact resource the feed is starved for.
 
-    web_server_begin();   // configuration web page (http://theorb.local/); orb_web.cpp
+    web_server_begin();   // configuration web page (http://theorb.local/); web_server.cpp
 
     // Everything is up. Noted for the log only: the "Ready, turn the knob" card that used
     // to gate a first boot after a firmware update is gone. It answered "is it finished?"
@@ -679,7 +680,7 @@ void loop() {
         theme_select::set(g_pendingSlug.c_str());
     }
 
-    wifi_mdns_tick();   // mDNS (and OTA when compiled in), once WiFi is up; orb_wifi.cpp
+    wifi_mdns_tick();   // mDNS (and OTA when compiled in), once WiFi is up; net/wifi.cpp
 
     // Push a fresh ADS-B snapshot to the radar (copy under the mutex, render outside).
     //
@@ -770,7 +771,7 @@ void loop() {
     static uint32_t lastStatus = 0;
     if (millis() - lastStatus > 5000) {
         lastStatus = millis();
-        stats_status_tick();   // heap trend + [memdbg] every ~15 s; orb_stats.cpp
+        stats_status_tick();   // heap trend + [memdbg] every ~15 s; diagnostics.cpp
         char clk[8] = "--:--";
         struct tm ti;
         // orb_local_time, not getLocalTime(&ti, 0): that one can answer false without

@@ -8,7 +8,7 @@
 #include "clock_view.h"
 #include "display.h"      // orb_screen_covered(): do not redraw under a cover
 #include "theme_audio.h"  // the theme's tick bank
-#ifdef ARDUINO
+#if defined(ARDUINO) || defined(ESP_PLATFORM)   // ESP-IDF: components/orb_audio implements audio.h
 #include "audio.h"
 #else
 // The simulator builds no audio module. Compiled out rather than faked, the same way
@@ -19,6 +19,14 @@
 #ifdef ARDUINO
 #include <Arduino.h>
 #include <esp_heap_caps.h>
+#elif defined(ESP_PLATFORM)   // pure ESP-IDF: see orb_platform.h
+#include "orb_platform.h"
+#include <esp_heap_caps.h>
+#include <cstdio>
+#include <cstdarg>
+#include <cstdlib>
+#include <ctime>
+#include <time.h>
 #else
 // Desktop/native build (no ESP32 core): shim the two Arduino-only calls this
 // file uses so it can run in the LVGL simulator for real screenshots.
