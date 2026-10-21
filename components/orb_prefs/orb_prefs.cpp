@@ -95,6 +95,13 @@ bool orb_prefs::getBool(const char *key, bool def) {
     return v != 0;
 }
 
+bool orb_prefs::getBlob(const char *key, void *out, size_t len) {
+    Handle r(false);
+    size_t n = 0;
+    if (!r.open || nvs_get_blob(r.h, key, nullptr, &n) != ESP_OK || n != len) return false;
+    return nvs_get_blob(r.h, key, out, &n) == ESP_OK;
+}
+
 bool orb_prefs::isKey(const char *key) {
     Handle r(false);
     nvs_type_t t;
@@ -134,6 +141,11 @@ bool orb_prefs::putDouble(const char *key, double value) {
 bool orb_prefs::putBool(const char *key, bool value) {
     Handle w(true);
     return w.open && commit(w, nvs_set_u8(w.h, key, value ? 1 : 0), key);
+}
+
+bool orb_prefs::putBlob(const char *key, const void *value, size_t len) {
+    Handle w(true);
+    return w.open && commit(w, nvs_set_blob(w.h, key, value, len), key);
 }
 
 bool orb_prefs::remove(const char *key) {
