@@ -7,7 +7,7 @@ is finished, two firmwares live in this repository side by side:
 |---|---|---|
 | Source | `main/`, `components/` | `src/` |
 | Build | `idf.py` | PlatformIO (`platformio.ini`) |
-| Status | clock and flight tracker UI, no network yet | everything |
+| Status | stage 2 done: clock and flight tracker, on WiFi with the live feed | everything |
 
 The desktop simulator still builds from `src/` with PlatformIO (`pio run -e native`) and is
 not affected by anything here.
@@ -64,6 +64,44 @@ idf.py -B build-bringup -D SDKCONFIG=build-bringup/sdkconfig -D SDKCONFIG_DEFAUL
 That sets `CONFIG_ORB_BRINGUP_PAGE=y`. The Orb then boots to a
 test page that exercises only the panel and the knob (`main/bringup.cpp`) and opens neither
 the card nor NVS.
+
+## Stage 2: done (2026-10-21)
+
+The exit criterion, the clock and the flight tracker working on hardware and in the
+simulator, was met on an Orb on 2026-10-21:
+
+- **Bring-up page:** the panel draws round and true (the ring reaches the edge evenly, red,
+  green and blue in order, text upright) and the knob counts, presses and rocks.
+- **Clock:** the owner's Arduino-chosen theme, read from NVS; plates, overlays and 13 of 28
+  font slots read straight from the baked `themeart` partition; time from the RTC, then NTP.
+- **Flight Tracker:** WiFi, NTP, and the aircraft feed over HTTPS with the certificate
+  verified (`api.adsb.lol -> 200`, aircraft drawn on the scope), polled by `net_task.cpp`'s
+  rules. Tested on a phone hotspot through `sdkconfig.dev`, because the Orb was away from
+  its saved network.
+- **Simulator:** builds from the same `src/` and renders both apps (`--shot`).
+- **The Arduino build** kept building throughout, its sizes checked after every change to
+  `src/`, as did `tools/audit.py`'s output.
+
+Against the plan's list for the stage: `idf.py` with ESP-IDF pinned; Waveshare's board
+package as the reference; `esp_lcd` + `esp_lvgl_port` on LVGL 8; the knob on PCNT with the
+detent and rock logic kept; the sdkconfig items; `sdkconfig.defaults` committed. Two
+departures, both deliberate: the knob component is `orb_knob` (see "Names to avoid"), and
+`ui`, `themes` and `apps` are one `orb_ui` component compiling them from `src/` (see "How
+the shared code reaches ESP-IDF").
+
+**Not deleted yet, on purpose:** the plan says to delete `orb_link.*`, `theme_pull.*`,
+`ticker_client.*`, the `INTEL_GATEWAY_HOST` clients, WiFiManager and ArduinoOTA "with the
+port". The ESP-IDF firmware compiles none of them. Their source stays while the Arduino
+firmware does, because it still uses all of them and the simulator builds two
+(`ticker_client`, `intel_client`). They go when the Arduino build is retired.
+
+**Left for later stages, in the order the plan has them:** the setup portal, joining and
+saving networks (3); one HTTPS client task with typed queues, which also removes the
+shared-state globals (4); themes v2 and baking on ESP-IDF (5); Nordic fonts (6); NRK news,
+which brings Headlines back (7); yr.no weather (8); radio and the ES8311 (9); Settings,
+auth and OTA (10); CI (11). Smaller gaps from this stage, none of them in the plan's list,
+are in "What runs, and what does not yet" above. Two are worth measuring rather than
+leaving: the QSPI clock (40 MHz here, 80 on Arduino) and PNGdec's C path.
 
 ## The toolchain: `idf.py`, ESP-IDF v5.5.6
 
