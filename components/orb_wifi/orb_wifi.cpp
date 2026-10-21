@@ -17,6 +17,7 @@
 #include "freertos/task.h"
 #include "sdkconfig.h"
 #include "orb_prefs.h"
+#include "portal.h"
 
 static const char *TAG = "wifi";
 
@@ -27,6 +28,15 @@ constexpr uint32_t BACKOFF_MAX_MS   = 30000;
 constexpr uint32_t ATTEMPT_MS       = 20000;   // association + DHCP, before it counts as failed
 constexpr const char *LIST_KEY      = "wifiNets";
 constexpr uint8_t LIST_VERSION      = 1;
+// The setup access point. Open while it is up: see portal.cpp for why, and what replaces it.
+constexpr const char *AP_SSID       = "The Orb Setup";
+constexpr uint32_t PROVISION_ROUND_MS = 30000;   // saved networks retried this often while it is up
+constexpr uint32_t PORTAL_LINGER_MS   = 60000;   // kept up after a join, so the phone sees "joined"
+#ifdef CONFIG_ORB_WIFI_SETUP_AFTER_S
+constexpr int64_t SETUP_AFTER_US = (int64_t)CONFIG_ORB_WIFI_SETUP_AFTER_S * 1000000;
+#else
+constexpr int64_t SETUP_AFTER_US = 300LL * 1000000;
+#endif
 
 // --- the saved list, as stored -----------------------------------------------------------
 struct Net {
@@ -41,7 +51,8 @@ struct SavedList {
 };
 
 // --- what reaches the manager task ---------------------------------------------------------
-enum EvType : uint8_t { EV_START, EV_DISCONNECTED, EV_GOT_IP, EV_TIMER, EV_TRY, EV_FORGET, EV_SCAN };
+enum EvType : uint8_t { EV_START, EV_DISCONNECTED, EV_GOT_IP, EV_TIMER, EV_TRY, EV_FORGET, EV_SCAN,
+                       EV_PORTAL_CLOSE };
 struct Ev {
     EvType   type;
     uint8_t  reason;      // EV_DISCONNECTED
@@ -80,6 +91,10 @@ int   s_candCount = 0, s_candIdx = 0;
 uint32_t s_backoffMs = BACKOFF_FIRST_MS;
 bool  s_sntpStarted = false;
 volatile bool s_expectDisconnect = false; // our own esp_wifi_disconnect(), not a lost link
+bool  s_portalOn = false;
+bool  s_scanPending = false;              // a picker asked to look again while the radio was joining
+int64_t s_offlineSinceUs = 0;             // when the Orb was last connected (or booted); 0 while connected
+esp_timer_handle_t s_portalTimer = nullptr;
 
 // Picker scan results.
 volatile int s_scanState = -2;            // -1 running, -2 failed/none, >=0 count
@@ -220,6 +235,15 @@ int8_t seen_rssi(const wifi_ap_record_t *aps, int n, const char *ssid) {
     return best;
 }
 
+// A picker's "look again" that arrived mid-attempt, run now that the radio is free.
+void run_pending_scan() {
+    if (!s_scanPending) return;
+    s_scanPending = false;
+    wifi_ap_record_t *aps = nullptr;
+    scan_now(&aps);
+    free(aps);
+}
+
 // Join one network. The driver is on RAM storage, so this configuration is never written.
 void attempt(const Net &n, const char *why) {
     wifi_config_t cfg = {};
@@ -242,6 +266,32 @@ void attempt(const Net &n, const char *why) {
     set_state(orb_wifi::State::Connecting);
     esp_wifi_connect();
     arm(ATTEMPT_MS);
+}
+
+// The setup access point, alongside the station: APSTA, so the station side keeps trying the
+// saved networks the whole time. The Arduino firmware's portal turned the station off, and an
+// Orb with a perfectly good saved network then sat in setup until somebody pulled the plug.
+void open_portal(const char *why) {
+    if (s_portalOn) return;
+    esp_timer_stop(s_portalTimer);
+    esp_wifi_set_mode(WIFI_MODE_APSTA);               // RAM storage: never written
+    wifi_config_t ap = {};
+    memcpy(ap.ap.ssid, AP_SSID, strlen(AP_SSID));
+    ap.ap.ssid_len = strlen(AP_SSID);
+    ap.ap.channel = 1;
+    ap.ap.authmode = WIFI_AUTH_OPEN;
+    ap.ap.max_connection = 4;
+    esp_wifi_set_config(WIFI_IF_AP, &ap);
+    s_portalOn = portal::start();
+    printf("[wifi] '%s' is up (%s)\n", AP_SSID, why);
+}
+
+void close_portal() {
+    if (!s_portalOn) return;
+    portal::stop();
+    esp_wifi_set_mode(WIFI_MODE_STA);
+    s_portalOn = false;
+    printf("[wifi] '%s' closed\n", AP_SSID);
 }
 
 // Start a round: scan, then line up the candidates. Visible saved networks strongest first,
@@ -268,10 +318,11 @@ void start_round() {
             Cand t = s_cands[j]; s_cands[j] = s_cands[j - 1]; s_cands[j - 1] = t;
         }
     if (s_candCount == 0) {
-        // Nothing saved and no development network: the setup access point is the answer, and
-        // it is the next step of this stage. Until it exists the Orb waits here, and says so.
+        // Nothing saved and no development network: there is nothing to try, so the setup
+        // access point opens at once and the Orb waits on it. No timer: a network arrives
+        // through tryNetwork() from the page, not from a retry.
+        open_portal("no saved network");
         set_state(orb_wifi::State::Provisioning);
-        printf("[wifi] no saved network; the setup access point is not built yet\n");
         return;
     }
     printf("[wifi] round:");
@@ -301,6 +352,18 @@ void next_candidate() {
     xSemaphoreTake(s_lock, portMAX_DELAY);
     s_current[0] = 0;
     xSemaphoreGive(s_lock);
+    // Long enough offline and the setup access point opens; the saved networks are still tried,
+    // more slowly, for as long as it is up.
+    run_pending_scan();
+    if (!s_portalOn && esp_timer_get_time() - s_offlineSinceUs >= SETUP_AFTER_US)
+        open_portal("no saved network has answered for a while");
+    if (s_portalOn) {
+        printf("[wifi] no saved network answered; trying again in %lu s\n",
+               (unsigned long)(PROVISION_ROUND_MS / 1000));
+        set_state(orb_wifi::State::Provisioning);
+        arm(PROVISION_ROUND_MS);
+        return;
+    }
     printf("[wifi] no saved network answered; next round in %lu s\n", (unsigned long)(s_backoffMs / 1000));
     set_state(orb_wifi::State::Backoff);
     arm(s_backoffMs);
@@ -343,7 +406,15 @@ void manager(void *) {
                 promote(s_cands[s_candIdx].net);
             }
             set_state(orb_wifi::State::Connected);
+            s_offlineSinceUs = 0;
+            run_pending_scan();
             start_sntp();
+            // Joined with the setup network up: leave it up a minute, so the phone on the page
+            // reads "joined" from the Orb rather than losing it mid-sentence.
+            if (s_portalOn) {
+                esp_timer_stop(s_portalTimer);
+                esp_timer_start_once(s_portalTimer, (uint64_t)PORTAL_LINGER_MS * 1000);
+            }
             break;
         }
 
@@ -371,6 +442,7 @@ void manager(void *) {
                 // The link went: a fresh round at once, in which the network that just dropped
                 // competes on signal with the rest, rather than a wait on a timer.
                 printf("[wifi] connection LOST from '%s' (reason %u)\n", s_current, e.reason);
+                s_offlineSinceUs = esp_timer_get_time();
                 s_backoffMs = BACKOFF_FIRST_MS;
                 start_round();
             } else if (s_state == orb_wifi::State::Connecting) {
@@ -387,9 +459,15 @@ void manager(void *) {
             } else if (s_state == orb_wifi::State::Connecting) {
                 printf("[wifi] '%s' gave no address in 20 s\n", s_current);
                 next_candidate();
-            } else if (s_state == orb_wifi::State::Backoff) {
+            } else if (s_state == orb_wifi::State::Backoff || s_state == orb_wifi::State::Provisioning) {
                 start_round();
             }
+            break;
+
+        case EV_PORTAL_CLOSE:
+            // Only once the Orb is actually online; if the link went again in the meantime the
+            // setup network is still the way back.
+            if (s_state == orb_wifi::State::Connected) close_portal();
             break;
 
         case EV_TRY:
@@ -402,8 +480,9 @@ void manager(void *) {
             break;   // the list was edited under the lock; nothing for the radio to do
 
         case EV_SCAN: {
-            // Not mid-attempt: the radio cannot scan while it is joining.
-            if (s_state == orb_wifi::State::Connecting) { s_scanState = -2; break; }
+            // The radio cannot scan while it is joining, so a request mid-attempt waits for the
+            // attempt to end (run_pending_scan) rather than being answered with an empty list.
+            if (s_state == orb_wifi::State::Connecting) { s_scanPending = true; break; }
             wifi_ap_record_t *aps = nullptr;
             scan_now(&aps);
             free(aps);
@@ -451,6 +530,7 @@ bool orb_wifi::begin() {
     }
     esp_netif_t *sta = esp_netif_create_default_wifi_sta();
     esp_netif_set_hostname(sta, "theorb");
+    esp_netif_create_default_wifi_ap();   // used only while "The Orb Setup" is up (192.168.4.1)
 
     // Init reads the driver's stored network (orb_prefs::begin() has initialised NVS, and never
     // erases it)...
@@ -503,6 +583,11 @@ bool orb_wifi::begin() {
                                         .dispatch_method = ESP_TIMER_TASK, .name = "wifi",
                                         .skip_unhandled_events = true };
     esp_timer_create(&t, &s_timer);
+    const esp_timer_create_args_t pt = { .callback = [](void *) { post(EV_PORTAL_CLOSE); }, .arg = nullptr,
+                                         .dispatch_method = ESP_TIMER_TASK, .name = "wifi_portal",
+                                         .skip_unhandled_events = true };
+    esp_timer_create(&pt, &s_portalTimer);
+    s_offlineSinceUs = esp_timer_get_time();   // boot counts as "not yet connected"
     esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, on_event, nullptr);
     esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, on_event, nullptr);
     // Core 0, with the rest of the network. Scan records are on the heap, so 4 KB is ample.
@@ -581,6 +666,8 @@ bool orb_wifi::tryNetwork(const char *ssid, const char *pass) {
 orb_wifi::TryResult orb_wifi::tryResult() { return s_try; }
 
 void orb_wifi::startScan() { s_scanState = -1; post(EV_SCAN); }
+// scanResults() answers from the last scan, a round's or a picker's, whenever there is one, so
+// a picker that opens shows a list at once; startScan() is for "look again".
 
 int orb_wifi::scanResults(char names[][33], int8_t *rssi, bool *isOpen, int maxN) {
     const int st = s_scanState;
