@@ -1,4 +1,5 @@
 #include "curved_text.h"
+#include "orb_utf8.h"   // glyphs by character, not by byte
 #include "diag_log.h"   // the arc guard below says the fault out loud
 #include <math.h>
 #include <string.h>
@@ -142,14 +143,12 @@ void curved_text::draw_arc(const Target &dst, const lv_font_t *font, const char 
     // for whoever curves a multi-line slot first, not a layout decided here in advance.
     if (strchr(str, '\n'))
         diag::log("curved_text: draw_arc cannot lay a paragraph on one arc: \"%s\"", str);
-    const int n = (int)strlen(str), cap = n < 80 ? n : 80;
+    uint32_t cp[80];
+    const int cap = orb_utf8_decode(str, cp, 80);
     float w[80], total = 0.0f;
     for (int i = 0; i < cap; ++i) {
-        char c[2] = { str[i], 0 };
-        lv_point_t s;
-        lv_txt_get_size(&s, c, font, 0, 0, LV_COORD_MAX, 0);
-        w[i] = (float)s.x;
-        total += s.x;
+        w[i] = (float)lv_font_get_glyph_width(font, cp[i], 0);
+        total += w[i];
     }
     // Along the bottom of a dial the glyphs have to be flipped, or the words run upside
     // down and backwards. This is the test for "am I below the middle".
@@ -166,8 +165,8 @@ void curved_text::draw_arc(const Target &dst, const lv_font_t *font, const char 
         const float rot = ang + (bottom ? (float)M_PI : 0.0f);
         cursor += w[i];
         lv_font_glyph_dsc_t g;
-        if (!lv_font_get_glyph_dsc(font, &g, (uint32_t)(uint8_t)str[i], 0)) continue;
-        const uint8_t *bmp = lv_font_get_glyph_bitmap(font, (uint32_t)(uint8_t)str[i]);
+        if (!lv_font_get_glyph_dsc(font, &g, cp[i], 0)) continue;
+        const uint8_t *bmp = lv_font_get_glyph_bitmap(font, cp[i]);
         if (!bmp || g.box_w == 0 || g.box_h == 0) continue;
         const float offY = halfMid - (float)g.ofs_y - (float)g.box_h * 0.5f;
         const float cr = cosf(rot), sr = sinf(rot);
@@ -217,11 +216,12 @@ static void straight_line_impl(const curved_text::Target &dst, const lv_font_t *
                                float bx, float by, lv_color_t col, int glow, lv_color_t glowCol,
                                int align, lv_opa_t opa, const curved_text::Pill &pill) {
     if (!str[0]) return;
-    const int n = (int)strlen(str), cap = n < 80 ? n : 80;
+    uint32_t cp[80];
+    const int cap = orb_utf8_decode(str, cp, 80);
     float w[80], total = 0.0f;
     for (int i = 0; i < cap; ++i) {
         lv_font_glyph_dsc_t g;
-        w[i] = lv_font_get_glyph_dsc(font, &g, (uint32_t)(uint8_t)str[i], 0) ? (float)g.adv_w : 0.0f;
+        w[i] = lv_font_get_glyph_dsc(font, &g, cp[i], 0) ? (float)g.adv_w : 0.0f;
         total += w[i];
     }
     const float startX = (align == 1) ? (bx - total / 2.0f) : (align == 2) ? (bx - total) : bx;
@@ -243,8 +243,8 @@ static void straight_line_impl(const curved_text::Target &dst, const lv_font_t *
     float x = startX;
     for (int i = 0; i < cap; ++i) {
         lv_font_glyph_dsc_t g;
-        if (lv_font_get_glyph_dsc(font, &g, (uint32_t)(uint8_t)str[i], 0)) {
-            const uint8_t *bmp = lv_font_get_glyph_bitmap(font, (uint32_t)(uint8_t)str[i]);
+        if (lv_font_get_glyph_dsc(font, &g, cp[i], 0)) {
+            const uint8_t *bmp = lv_font_get_glyph_bitmap(font, cp[i]);
             if (bmp && g.box_w && g.box_h) {
                 const float destCx = x + (float)g.ofs_x + (float)g.box_w * 0.5f;
                 const float destCy = by + halfMid - (float)g.ofs_y - (float)g.box_h * 0.5f;

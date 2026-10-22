@@ -1,4 +1,5 @@
 #include "menu_text.h"
+#include "orb_utf8.h"   // glyphs by character, not by byte
 #include "config.h"          // SCREEN_W / SCREEN_H
 #include "custom_menu.h"     // CUSTOM_HAS_MENU* (compile-time show/hide gates) + CUSTOM_MENU_*_FONT
 #include "theme_style.h"
@@ -259,11 +260,12 @@ void stencil_composite(lv_color_t glowCol, int strength) {
 void draw_straight(const lv_font_t *font, const char *str, float bx, float by,
                    lv_color_t col, int glow, lv_color_t glowCol, int align, lv_opa_t opa = 255) {
     if (!font || !str || !str[0]) return;
-    const int n = (int)strlen(str), cap = n < 80 ? n : 80;
+    uint32_t cp[80];
+    const int cap = orb_utf8_decode(str, cp, 80);
     float w[80], total = 0.0f;
     for (int i = 0; i < cap; ++i) {
         lv_font_glyph_dsc_t g;
-        w[i] = lv_font_get_glyph_dsc(font, &g, (uint32_t)(uint8_t)str[i], 0) ? (float)g.adv_w : 0.0f;
+        w[i] = lv_font_get_glyph_dsc(font, &g, cp[i], 0) ? (float)g.adv_w : 0.0f;
         total += w[i];
     }
     const float startX = (align == 1) ? (bx - total / 2.0f) : (align == 2) ? (bx - total) : bx;
@@ -281,8 +283,8 @@ void draw_straight(const lv_font_t *font, const char *str, float bx, float by,
             float gx = startX;
             for (int i = 0; i < cap; ++i) {
                 lv_font_glyph_dsc_t g;
-                if (lv_font_get_glyph_dsc(font, &g, (uint32_t)(uint8_t)str[i], 0)) {
-                    const uint8_t *bmp = lv_font_get_glyph_bitmap(font, (uint32_t)(uint8_t)str[i]);
+                if (lv_font_get_glyph_dsc(font, &g, cp[i], 0)) {
+                    const uint8_t *bmp = lv_font_get_glyph_bitmap(font, cp[i]);
                     if (bmp && g.box_w && g.box_h)
                         stencil_glyph(bmp, g.box_w, g.box_h,
                                       gx + (float)g.ofs_x + (float)g.box_w * 0.5f,
@@ -301,8 +303,8 @@ void draw_straight(const lv_font_t *font, const char *str, float bx, float by,
     float x = startX;
     for (int i = 0; i < cap; ++i) {
         lv_font_glyph_dsc_t g;
-        if (lv_font_get_glyph_dsc(font, &g, (uint32_t)(uint8_t)str[i], 0)) {
-            const uint8_t *bmp = lv_font_get_glyph_bitmap(font, (uint32_t)(uint8_t)str[i]);
+        if (lv_font_get_glyph_dsc(font, &g, cp[i], 0)) {
+            const uint8_t *bmp = lv_font_get_glyph_bitmap(font, cp[i]);
             if (bmp && g.box_w && g.box_h) {
                 const float destCx = x + (float)g.ofs_x + (float)g.box_w * 0.5f;
                 const float destCy = by + halfMid - (float)g.ofs_y - (float)g.box_h * 0.5f;
@@ -402,9 +404,11 @@ void release() {
 // Width of a substring in the given font, in pixels.
 static float measure(const lv_font_t *font, const char *s, int len) {
     float total = 0.0f;
-    for (int i = 0; i < len; ++i) {
+    uint32_t cp[80];
+    const int n = orb_utf8_decode(s, cp, 80, s + len);   // `len` is bytes: the wrap splits on spaces
+    for (int i = 0; i < n; ++i) {
         lv_font_glyph_dsc_t g;
-        if (lv_font_get_glyph_dsc(font, &g, (uint32_t)(uint8_t)s[i], 0)) total += (float)g.adv_w;
+        if (lv_font_get_glyph_dsc(font, &g, cp[i], 0)) total += (float)g.adv_w;
     }
     return total;
 }
