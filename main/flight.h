@@ -27,4 +27,12 @@ void statusTick(bool wifiUp);
 
 uint32_t lastFeedOkMs();   // millis() of the last good poll, 0 if none yet
 
+double homeLat();
+double homeLon();
+
+// Settings > Range. src/app_hooks.cpp onRangeChange(): saved, the scope redrawn at once from
+// the last snapshot, and the feed asked again at the new radius. Display lock held.
+float rangeKm();
+void  setRangeKm(float km);
+
 }  // namespace flight

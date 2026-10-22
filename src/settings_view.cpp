@@ -1250,6 +1250,15 @@ namespace {
                 // owner exactly where they started. See host_wifi_connect() in main.cpp.
                 host_wifi_commit_credentials(s_wifiSelSsid, s_pass);
                 lv_label_set_text(s_wifiStatusLbl, "Connected!");
+#ifdef ESP_PLATFORM
+                // No restart on ESP-IDF: orb_wifi is already using the network and has saved
+                // it. Locating by IP is not ported yet (host_locate_current() says so), so
+                // first-time setup ends here too. host_wifi_connected_reboot() only clears
+                // the post-Reset setup flag.
+                s_firstBootPrompt = false;
+                host_wifi_connected_reboot();
+                lv_label_set_text(s_wifiStatusHint, "push to go back");
+#else
                 if (s_firstBootPrompt) {
                     // First-time setup (fresh out of the box, or right after a Reset):
                     // auto-detect location from the IP instead of making them go set it
@@ -1266,6 +1275,7 @@ namespace {
                     lv_label_set_text(s_wifiStatusHint, "restarting...");
                     host_wifi_connected_reboot();
                 }
+#endif
             } else {
                 lv_label_set_text_fmt(s_wifiStatusLbl, "Couldn't connect to\n%s.\nCheck the password.", s_wifiSelSsid);
                 lv_label_set_text(s_wifiStatusHint, "push to go back");

@@ -33,6 +33,8 @@ float    getFloat(const char *key, float def);       // Arduino putFloat: a 4-by
 double   getDouble(const char *key, double def);     // Arduino putDouble: an 8-byte blob
 bool     getBool(const char *key, bool def);
 bool     isKey(const char *key);
+// A blob of exactly `len` bytes; false (and `out` untouched) when absent or another size.
+bool     getBlob(const char *key, void *out, size_t len);
 
 // Writes, committed before they return. False if the write did not happen.
 bool putString(const char *key, const char *value);
@@ -42,6 +44,7 @@ bool putInt64(const char *key, int64_t value);
 bool putFloat(const char *key, float value);
 bool putDouble(const char *key, double value);
 bool putBool(const char *key, bool value);
+bool putBlob(const char *key, const void *value, size_t len);
 bool remove(const char *key);
 
 }  // namespace orb_prefs

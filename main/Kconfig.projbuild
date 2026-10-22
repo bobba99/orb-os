@@ -17,6 +17,16 @@ menu "The Orb OS"
             channels 1 to 11. Most of Europe, Norway included, also allows 12 and 13, and a
             router on one of those is invisible under "01"; set "NO", "GB", "DE"... for those.
 
+    config ORB_WIFI_SETUP_AFTER_S
+        int "Open The Orb Setup after this long without a network (seconds)"
+        default 300
+        range 30 3600
+        help
+            With saved networks, none of which has answered for this long, the Orb opens its
+            setup access point ("The Orb Setup") and keeps trying its saved networks while it is
+            up. With no saved network at all it opens at once. The station side is never turned
+            off for it, which is the lesson of the Arduino firmware's portal.
+
     config ORB_DEV_WIFI_SSID
         string "Development network to join instead of the stored one"
         default ""
