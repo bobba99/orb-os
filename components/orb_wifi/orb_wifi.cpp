@@ -56,7 +56,8 @@ enum EvType : uint8_t { EV_START, EV_DISCONNECTED, EV_GOT_IP, EV_TIMER, EV_TRY, 
 struct Ev {
     EvType   type;
     uint8_t  reason;      // EV_DISCONNECTED
-    uint32_t gen;         // EV_TIMER: which arming this was, so a stale one is ignored
+    uint32_t gen;         // EV_TIMER: which arming this was, so a stale one is ignored;
+                          // EV_DISCONNECTED: 1 when it is the manager's own disconnect
     uint32_t ip;          // EV_GOT_IP
     char     ssid[33];    // EV_DISCONNECTED: the network the driver says it left
 };
@@ -426,7 +427,10 @@ void manager(void *) {
             // the Orb, 2026-10-21: one late event left the Orb in BACKOFF for good). While
             // joining or joined, an event naming another network is the tail of an earlier
             // attempt and is ignored the same way.
-            if (s_expectDisconnect) break;
+            // The manager's own esp_wifi_disconnect(): marked when the driver reported it (the
+            // flag is long cleared by the time the queue gets here, which is how a try of the
+            // network the Orb was already on failed at once, 2026-10-22), or by its reason.
+            if (e.gen || e.reason == WIFI_REASON_ASSOC_LEAVE) break;
             if (s_state != orb_wifi::State::Connecting && s_state != orb_wifi::State::Connected) break;
             char cur[33];
             xSemaphoreTake(s_lock, portMAX_DELAY);
@@ -499,7 +503,9 @@ void on_event(void *, esp_event_base_t base, int32_t id, void *data) {
         const auto *d = (const wifi_event_sta_disconnected_t *)data;
         char ss[33] = "";
         if (d) memcpy(ss, d->ssid, d->ssid_len < 32 ? d->ssid_len : 32);   // not terminated by the driver
-        post(EV_DISCONNECTED, d ? d->reason : 0, 0, 0, ss);
+        // gen 1: this is the tail of the manager's own disconnect. Read here, in the event
+        // task, while attempt() is still waiting; the queue is read only after it has stopped.
+        post(EV_DISCONNECTED, d ? d->reason : 0, s_expectDisconnect ? 1 : 0, 0, ss);
     } else if (base == IP_EVENT && id == IP_EVENT_STA_GOT_IP) {
         const auto *g = (const ip_event_got_ip_t *)data;
         post(EV_GOT_IP, 0, 0, g->ip_info.ip.addr);
