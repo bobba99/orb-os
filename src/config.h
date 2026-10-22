@@ -8,6 +8,18 @@
 // exists because this stopped moving; it covers theme settings and nothing else, so a new
 // command or a deleted screen is invisible to it. Move this too.
 #define FW_VERSION "2.18.00"   // shown on the web config page + Stats screen
+
+// ---------- Which firmware this is ----------
+// ORB_IDF is 1 in the pure ESP-IDF port (REWRITE_PLAN.md) and 0 in the Arduino firmware and
+// the simulator. Branch on this, not on ESP_PLATFORM: Arduino-ESP32 is built on ESP-IDF and
+// defines ESP_PLATFORM too, so `#ifdef ESP_PLATFORM` is true on BOTH device builds. It stays
+// right for code that means "any ESP32", and wrong for code that means "the ESP-IDF port",
+// which is how Settings' WiFi page lost its Arduino restart text in stage 3.
+#if defined(ESP_PLATFORM) && !defined(ARDUINO)
+#define ORB_IDF 1
+#else
+#define ORB_IDF 0
+#endif
 // Edit pins below: replace every -1 with the value from the Waveshare factory demo
 // (see docs/HARDWARE.md and docs/SETUP.md). Do NOT guess them.
 

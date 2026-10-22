@@ -1250,7 +1250,7 @@ namespace {
                 // owner exactly where they started. See host_wifi_connect() in main.cpp.
                 host_wifi_commit_credentials(s_wifiSelSsid, s_pass);
                 lv_label_set_text(s_wifiStatusLbl, "Connected!");
-#ifdef ESP_PLATFORM
+#if ORB_IDF   // not ESP_PLATFORM, which the Arduino build defines too (config.h)
                 // No restart on ESP-IDF: orb_wifi is already using the network and has saved
                 // it. Locating by IP is not ported yet (host_locate_current() says so), so
                 // first-time setup ends here too. host_wifi_connected_reboot() only clears
