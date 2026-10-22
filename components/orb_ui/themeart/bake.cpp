@@ -59,13 +59,20 @@ const Asset ASSETS[] = {
     // (636 KB of PSRAM and ~0.2 s each) every time they were shown.
     { "splash_overlay.png",    true,  true  },   // LVGL, splash_lines.cpp
     { "radar_rings.png",       true,  true  },   // LVGL, radar_view.cpp
+    { "radar_overlay.png",     true,  true  },   // LVGL, radar_view.cpp
+    { "clock_shadow_hour.png",   true,  false }, // rotated with their hands
+    { "clock_shadow_minute.png", true,  false },
+    { "clock_shadow_second.png", true,  false },
+    { "wind_bg.png",           false, false },   // copied raw by the wind screen
+    { "wind_crank.png",        true,  false },   // rotated
+    { "wind_crank_shadow.png", true,  false },
 };
 constexpr size_t SD_ASSET_MAX_BYTES = 2 * 1024 * 1024;
 
 // Part of the fingerprint stored with a bake. Move it whenever the rules above change (an
 // asset added, a format choice changed): every baked theme then bakes again on its next
 // boot. Without it a theme whose own files did not change keeps the old bake for ever.
-constexpr uint32_t BAKE_RULES = 2;   // 2: splash_overlay.png and radar_rings.png baked
+constexpr uint32_t BAKE_RULES = 3;   // 2: splash glass, radar rings. 3: radar glass, shadows, wind
 
 void (*s_progress)(const char *, int, int) = nullptr;
 
