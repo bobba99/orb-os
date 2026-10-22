@@ -12,10 +12,11 @@
 // version line is built from a compiled constant. Uppercasing the recipe would miss every
 // one of those.
 //
-// ASCII ONLY, deliberately. The faces this device carries cover 0x20 to 0x7F (splash_lines
-// says so at its own call site), so an accented letter has no uppercase form to draw and
-// turning it into one would replace a character the theme can show with an empty box. Left
-// alone, it stays exactly as it was.
+// ASCII and Latin-1. The built-in faces carry Latin-1 since stage 6 (tools/gen_fonts.py), so
+// "Tromsø" becomes "TROMSØ"; æ, ø, å and the accented vowels have their capitals in the same
+// block, two bytes each in UTF-8 with only the second byte moving. ÿ, whose capital lives
+// outside Latin-1, and every other character are left exactly as they were. A theme font
+// that lacks a capital draws nothing for it; tools/theme_tool.py validate warns about that.
 #include <ctype.h>
 #include <stdio.h>
 #include <stddef.h>
@@ -25,6 +26,12 @@ inline void orb_upper(char *s) {
     for (; *s; ++s) {
         const unsigned char c = (unsigned char)*s;
         if (c >= 'a' && c <= 'z') *s = (char)(c - 32);
+        // UTF-8 C3 A0..BE is U+00E0..U+00FE; its capital is 0x20 lower, except ÷ (C3 B7).
+        else if (c == 0xC3 && s[1]) {
+            const unsigned char d = (unsigned char)s[1];
+            if (d >= 0xA0 && d <= 0xBE && d != 0xB7) s[1] = (char)(d - 0x20);
+            ++s;
+        }
     }
 }
 

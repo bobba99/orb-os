@@ -298,7 +298,10 @@ int host_geocode(const char *query, char names[][40], double *lats, double *lons
         }
         return true;
     };
-    return orb_net::fetch(req) == 200 ? out.n : 0;
+    const int status = orb_net::fetch(req);
+    printf("[locate] search '%s': %d result(s)%s%s\n", query, status == 200 ? out.n : 0,
+           out.n ? ", first " : "", out.n ? names[0] : "");
+    return status == 200 ? out.n : 0;
 }
 
 // --- recent places: the Arduino NVS key and format ("recents", a JSON array) -----------------

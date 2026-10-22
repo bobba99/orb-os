@@ -387,8 +387,8 @@ namespace theme_style {
 //
 //      Applied to the FINISHED string at the moment of drawing rather than to the format,
 //      which is the only place that catches live text: %A is Wednesday by the time strftime
-//      is done with it, {callsign} is UAL328 by the time the expander is. ASCII only, since
-//      the faces carry 0x20-0x7F and an accented letter has no uppercase form to draw.
+//      is done with it, {callsign} is UAL328 by the time the expander is. ASCII and
+//      Latin-1, which the built-in faces carry since stage 6 (orb_text_case.h).
 //      Studio bakes the glyphs against the uppercased text, so the letters are there.
 //      An Orb below this level draws every line in the case the design typed it.
 //  54  the Flight Tracker's location line (Radar::locText): a text slot that names the place
@@ -435,8 +435,8 @@ constexpr int BG_ANIM_MAX = 64;
 
 struct ClockText {
     // ALL CAPS. THEME_CAPS 53. Applied to the finished line at the moment of drawing, so it
-    // reaches live text as well as literal text; ASCII only, because the faces this device
-    // carries have no uppercase form for anything outside it. See orb_text_case.h.
+    // reaches live text as well as literal text; ASCII and Latin-1 (æøå to ÆØÅ). See
+    // orb_text_case.h.
     bool     upper  = false;
     bool     show   = false;
     int      x      = 233;
@@ -766,8 +766,8 @@ struct Names {
 // other screen has one. A screen without a card simply leaves it false.
 struct TextSlot {
     // ALL CAPS. THEME_CAPS 53. Applied to the finished line at the moment of drawing, so it
-    // reaches live text as well as literal text; ASCII only, because the faces this device
-    // carries have no uppercase form for anything outside it. See orb_text_case.h.
+    // reaches live text as well as literal text; ASCII and Latin-1 (æøå to ÆØÅ). See
+    // orb_text_case.h.
     bool     upper  = false;
     bool     show   = false;
     int      x      = 233;
@@ -1133,8 +1133,8 @@ struct Radar {
 
 struct MenuText {
     // ALL CAPS. THEME_CAPS 53. Applied to the finished line at the moment of drawing, so it
-    // reaches live text as well as literal text; ASCII only, because the faces this device
-    // carries have no uppercase form for anything outside it. See orb_text_case.h.
+    // reaches live text as well as literal text; ASCII and Latin-1 (æøå to ÆØÅ). See
+    // orb_text_case.h.
     bool     upper  = false;
     bool     show  = false;
     int      x     = 233;
@@ -1200,8 +1200,8 @@ struct Settings {
 // compiled ladder instead.
 struct SplashText {
     // ALL CAPS. THEME_CAPS 53. Applied to the finished line at the moment of drawing, so it
-    // reaches live text as well as literal text; ASCII only, because the faces this device
-    // carries have no uppercase form for anything outside it. See orb_text_case.h.
+    // reaches live text as well as literal text; ASCII and Latin-1 (æøå to ÆØÅ). See
+    // orb_text_case.h.
     bool     upper  = false;
     int      x         = 233;
     int      y         = 233;

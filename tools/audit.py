@@ -291,6 +291,25 @@ if pub and dist:
     else:
         print(f"    ok: both {pv}")
 
+print("\n=== 7. Do the built-in fonts carry Norwegian letters? ===")
+print("    tools/gen_fonts.py writes them; LVGL's own command would drop æøå again.\n")
+
+NORDIC = "0x20-0x7F,0xA0-0xFF,0x2013,0x2014,0x2018,0x2019,0x201C,0x201D,0x2022,0x2026"
+conf = read(os.path.join(FW, "include", "lv_conf.h")) or ""
+wanted = [f"fonts/lv_font_montserrat_{n}.c" for n in re.findall(r"ORB_FONT_MONTSERRAT_(\d+)\s+1", conf)]
+wanted += [f"font_inter_{n}.c" for n in (12, 14, 16, 18, 20)]
+before = len(findings)
+for rel in wanted:
+    text = read(os.path.join(FW, "src", rel))
+    if text is None:
+        report("FONT", f"src/{rel} is missing; run tools/gen_fonts.py")
+    elif "-r " + NORDIC not in (re.search(r"\* Opts: (.*)", text) or [None, ""])[1]:
+        report("FONT", f"src/{rel} was not made with the Norwegian range; run tools/gen_fonts.py")
+for n in re.findall(r"LV_FONT_MONTSERRAT_(\d+)\s+1", conf):
+    report("FONT", f"lv_conf.h turns LVGL's ASCII-only Montserrat {n} back on")
+if len(findings) == before:
+    print(f"    ok: {len(wanted)} fonts")
+
 print()
 if findings:
     print(f"{len(findings)} finding(s).")

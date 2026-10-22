@@ -97,7 +97,7 @@ firmware does, because it still uses all of them and the simulator builds two
 (`ticker_client`, `intel_client`). They go when the Arduino build is retired.
 
 **Left for later stages, in the order the plan has them:** the setup portal, joining and
-saving networks (3, done); one HTTPS client task (4, done); themes (5, done); themes v2 and baking on ESP-IDF (5); Nordic fonts (6); NRK news,
+saving networks (3, done); one HTTPS client task (4, done); themes (5, done); Nordic fonts (6, done); themes v2 and baking on ESP-IDF (5); Nordic fonts (6); NRK news,
 which brings Headlines back (7); yr.no weather (8); radio and the ES8311 (9); Settings,
 auth and OTA (10); CI (11). Smaller gaps from this stage, none of them in the plan's list,
 are in "What runs, and what does not yet" above. Two are worth measuring rather than
@@ -187,6 +187,27 @@ Seen on the Orb: the Cold War rebake and every screen of it; Plain (bake 668 KB 
 tool's 0.65 MB estimate); a copy of Plain stored with no extra bytes; the error screen for a
 schema-2 theme. Not done: running `theme_tool.py validate` on a real Orb Studio theme, which
 needs the card in a computer. Left for later: skipping the round screen's invisible corners.
+
+## Stage 6: Norwegian letters in the built-in fonts (2026-10-22)
+
+`tools/gen_fonts.py` regenerates every built-in font with Latin-1 and typographic punctuation
+(`0x20-0x7F, 0xA0-0xFF, – — ‘ ’ “ ” • …`):
+
+- **Montserrat**, every size `include/lv_conf.h` turns on, from LVGL's own source and with its
+  own recorded options (icons included), into `src/fonts/` under LVGL's names. `lv_conf.h`
+  switches LVGL's ASCII-only copies off and declares these; no call site changed. The same
+  options without the new range reproduce LVGL's files byte for byte.
+- **Inter** (the splash's lines) from `tools/fonts/InterVariable.ttf`, Inter 4.1 under the OFL,
+  the file that reproduces the old fonts' metrics exactly.
+- **Text from the network** is fitted to its font (`src/orb_text_fit.h`) instead of folded to
+  ASCII, and ALL CAPS reaches Latin-1 (`src/orb_text_case.h`).
+- `tools/audit.py` fails if a built-in font loses the range; `theme_tool.py validate` warns
+  about a theme font without æøå.
+
+Cost: about 100 KB more glyph pixels and the kerning that goes with them; the ESP-IDF image is
+4.96 MB of a 6.4 MB partition. The compiled design's own faces (`custom_menu_font1`,
+`custom_radar_font1/2`) are left: they were made from fonts not in the repository and carry
+only the characters that design drew. Themes bring their own.
 
 ## The toolchain: `idf.py`, ESP-IDF v5.5.6
 
