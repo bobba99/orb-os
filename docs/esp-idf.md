@@ -46,7 +46,7 @@ place of their own.
 | SD card (SPI, 20/10/4 MHz negotiation, never formats) | |
 | Settings in NVS, same keys as Arduino, never erases | Some settings: what the clock, the scope and Settings use is read |
 | RTC seeds the clock at boot | NTP, writing NTP time back to the RTC |
-| Clock, Flight Tracker and Settings apps, theme, splash | Headlines (its slot is held by a hidden empty screen), the web server |
+| Clock, Flight Tracker, Headlines (NRK and VG) and Settings apps, theme, splash | The web server |
 | WiFi: several saved networks, fallback, backoff, "The Orb Setup", joining with the knob; NTP; the aircraft feed over verified HTTPS | Forgetting a network from the screen |
 | One HTTPS client task (`orb_net`): the feed, flight routes, Settings > Location (search, recents, IP lookup) | Settings > Reset erases nothing (stage 10) |
 | | Audio (a stub reporting no codec), IMU, battery, idle dimming |
@@ -96,10 +96,10 @@ port". The ESP-IDF firmware compiles none of them. Their source stays while the 
 firmware does, because it still uses all of them and the simulator builds two
 (`ticker_client`, `intel_client`). They go when the Arduino build is retired.
 
-**Left for later stages, in the order the plan has them:** the setup portal, joining and
-saving networks (3, done); one HTTPS client task (4, done); themes (5, done); Nordic fonts (6, done); themes v2 and baking on ESP-IDF (5); Nordic fonts (6); NRK news,
-which brings Headlines back (7); yr.no weather (8); radio and the ES8311 (9); Settings,
-auth and OTA (10); CI (11). Smaller gaps from this stage, none of them in the plan's list,
+**The stages after this one, in the plan's order:** the setup portal, joining and saving
+networks (3, done); one HTTPS client task (4, done); themes v2 and baking on ESP-IDF (5, done);
+Nordic fonts (6, done); NRK and VG news, which brought Headlines back (7, done); yr.no weather
+(8); radio and the ES8311 (9); Settings, auth and OTA (10); CI (11). Smaller gaps from this stage, none of them in the plan's list,
 are in "What runs, and what does not yet" above. Two are worth measuring rather than
 leaving: the QSPI clock (40 MHz here, 80 on Arduino) and PNGdec's C path.
 
@@ -208,6 +208,28 @@ Cost: about 100 KB more glyph pixels and the kerning that goes with them; the ES
 4.96 MB of a 6.4 MB partition. The compiled design's own faces (`custom_menu_font1`,
 `custom_radar_font1/2`) are left: they were made from fonts not in the repository and carry
 only the characters that design drew. Themes bring their own.
+
+## Stage 7: news from NRK and VG (2026-10-22)
+
+Headlines is back, reading NRK's and VG's RSS feeds directly (`main/news.cpp`; the format and
+`/news.json` are in `docs/news.md`). The screen is Arduino's (`src/intel_view.cpp`, unchanged
+apart from an ESP-IDF WiFi check); `main/news.cpp` implements the two calls it makes,
+`intel_fetch()` and `intel_brief_fetch()`, which went to the Orb Studio gateway on Arduino.
+
+- One feed per publisher, chosen by the theme's topic; Settings > News (ESP-IDF only) picks NRK,
+  VG or both. Parsed with expat as it arrives, 20 stories a feed at most, merged newest first.
+- Summaries come from each story's `<description>`, kept with the list, so a press needs no
+  second request.
+- Conditional requests through `orb_net`, and a round at most every five minutes.
+- About gains "News: NRK, VG · Places: Open-Meteo".
+- `main/CMakeLists.txt` links `main` WHOLE_ARCHIVE: `src/` calls functions defined here, and an
+  object nothing in `main` itself names was being left out of the link.
+
+Seen on the Orb: both feeds (NRK 20 stories from 22 KB of a 109 KB feed, VG 10), æøå on screen,
+a story's summary, Settings > News cycling the sources, the third credit line inside the circle.
+
+Not done, on purpose: the plan's rename of `intel` to `news`. Those files are shared with the
+Arduino firmware, which still reads the gateway through them; the rename goes with Arduino.
 
 ## The toolchain: `idf.py`, ESP-IDF v5.5.6
 
