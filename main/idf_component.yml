@@ -1,0 +1,5 @@
+dependencies:
+  idf: "5.5.6"
+  # Streaming XML for the news feeds (main/news.cpp). ESP-IDF 5.x no longer carries expat in
+  # its own tree; this is Espressif's packaging of it, pinned exactly like the rest.
+  espressif/expat: "2.8.4"

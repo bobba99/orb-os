@@ -14,7 +14,7 @@ set(SHARED
     app_shell.cpp app_theme.cpp input_router.cpp knob_help.cpp update_ui.cpp
     clock_view.cpp clock_wind.cpp wind_notice.cpp adsb_client.cpp
     radar_view.cpp ui.cpp radar_sprite.cpp coastline.cpp airports.cpp roads_sd.cpp
-    route.cpp photo.cpp weather.cpp wx_radar.cpp cloud_image.cpp intel.cpp
+    route.cpp photo.cpp intel_view.cpp intel_sprite.cpp weather.cpp wx_radar.cpp cloud_image.cpp intel.cpp
     theme_style.cpp theme_select.cpp theme_sd.cpp  theme_font.cpp theme_audio.cpp
     custom_sprite.cpp plate_sprite.cpp office_sprite.cpp menu_sprite.cpp menu_text.cpp
     splash_art.cpp splash_lines.cpp curved_text.cpp text_tokens.cpp

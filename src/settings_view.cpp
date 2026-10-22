@@ -69,6 +69,10 @@ extern void host_wx_units_set(int mode);
 // that button's callback did.
 extern float host_get_range_km();
 extern void  host_set_range_km(float km);
+#if ORB_IDF
+extern int  host_news_sources();          // main/news.cpp: 0 NRK and VG, 1 NRK, 2 VG
+extern void host_news_sources_set(int v);
+#endif
 
 namespace {
     // MODE_LOCATION is a 4-item menu (current / search / recent / back); MODE_RECENT is
@@ -83,8 +87,16 @@ namespace {
     // removed. Inserting mid-list shifts the numeric meaning of a theme's saved
     // "default selection", so an older theme may now open Settings on a neighbouring
     // item. Cosmetic only, and DEFAULT_SEL below still clamps anything out of range.
+    // News: which publishers Headlines reads, on ESP-IDF only, where Headlines reads them
+    // itself (main/news.cpp); Arduino's come from the gateway and have no such choice. Just
+    // before Back, so only Back's index moves for a theme that names a default row.
+#if ORB_IDF
+    enum { ITEM_DISPLAY = 0, ITEM_LOCATION, ITEM_SOUND, ITEM_UNITS, ITEM_RANGE, ITEM_WIFI, ITEM_DESIGN, ITEM_ABOUT, ITEM_RESET, ITEM_NEWS, ITEM_BACK, ITEM_COUNT };
+    const char *ITEM_LABELS[ITEM_COUNT] = { "Display", "Location", "Sound", "Units", "Range", "WiFi", "Theme", "About", "Reset", "News", "Back" };
+#else
     enum { ITEM_DISPLAY = 0, ITEM_LOCATION, ITEM_SOUND, ITEM_UNITS, ITEM_RANGE, ITEM_WIFI, ITEM_DESIGN, ITEM_ABOUT, ITEM_RESET, ITEM_BACK, ITEM_COUNT };
     const char *ITEM_LABELS[ITEM_COUNT] = { "Display", "Location", "Sound", "Units", "Range", "WiFi", "Theme", "About", "Reset", "Back" };
+#endif
     // A Launch Kit push's "Default selection" (was editor-preview-only; now baked
     // in) — which item the main menu opens on, both at first boot and every time
     // the app switcher hands control back to Settings. Out-of-range (a stale
@@ -681,6 +693,14 @@ namespace {
         if (hl) lv_obj_align(hl, LV_ALIGN_CENTER, 0, (lv_coord_t)lroundf(WHEEL_CY));
     }
 
+#if ORB_IDF
+    // The News row says what it is set to, and a press moves it on.
+    void set_news_label() {
+        static const char *const SRC[3] = { "News   NRK + VG", "News   NRK", "News   VG" };
+        const int v = host_news_sources();
+        if (s_items[ITEM_NEWS]) lv_label_set_text(s_items[ITEM_NEWS], SRC[v >= 0 && v <= 2 ? v : 0]);
+    }
+#endif
     void refresh_menu() { wheel_layout(s_items, ITEM_COUNT, s_sel, s_hl); }
 
     int idle_index() {   // which IDLE_MS entry the current timeout matches (default 1 hour)
@@ -1502,6 +1522,13 @@ void settingsview::onPress() {
         else if (s_sel == ITEM_DESIGN) { s_designSel = 0; show_page(MODE_DESIGN_SELECT); }
         else if (s_sel == ITEM_ABOUT) { show_page(MODE_ABOUT); }
         else if (s_sel == ITEM_RESET) { show_page(MODE_RESET_CONFIRM); }
+#if ORB_IDF
+        else if (s_sel == ITEM_NEWS) {
+            host_news_sources_set((host_news_sources() + 1) % 3);   // both -> NRK -> VG -> both
+            set_news_label();
+            refresh_menu();
+        }
+#endif
         else {                                          // Back -> return to the app switcher
             app_shell::setCaptured(false);
             app_shell::openSwitcher();
@@ -1739,6 +1766,9 @@ void settingsview::init() {
         // Font, opacity, and position are all set dynamically in refresh_menu() —
         // they depend on distance from the current selection (the wheel effect).
     }
+#if ORB_IDF
+    set_news_label();
+#endif
     // --- brightness page ---
     s_bright = lv_obj_create(s_screen);
     lv_obj_remove_style_all(s_bright);

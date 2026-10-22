@@ -8,6 +8,10 @@
 #include "font_ladder.h"
 #include "theme_font.h"
 #include "app_shell.h"
+#if ORB_IDF
+#include "orb_wifi.h"
+#include <esp_heap_caps.h>   // the curved age line's canvas, in PSRAM
+#endif
 #ifdef ARDUINO
 #include <Arduino.h>
 #include <WiFi.h>
@@ -336,6 +340,8 @@ void show(lv_obj_t *o, bool on) {
 const char *empty_reason() {
 #ifdef ARDUINO
     if (WiFi.status() != WL_CONNECTED) return "No WiFi\nYour Orb is fine";
+#elif ORB_IDF
+    if (!orb_wifi::connected()) return "No WiFi\nYour Orb is fine";
 #endif
     // Three full stops, not "…": Montserrat has no glyph at U+2026 and draws an empty box
     // for it. Same reason the gateway sends ASCII in the headlines themselves.

@@ -30,6 +30,7 @@
 #include "orb_wifi.h"
 #include "location.h"
 #include "routes.h"
+#include "intel_view.h"
 
 namespace {
 
@@ -51,6 +52,7 @@ volatile bool     s_visible = false;
 volatile uint32_t s_lastFeedOkMs = 0;
 volatile bool     s_requery = false;   // range or centre changed: begin() again
 volatile bool     s_dropTable = false; // the centre moved: the old contacts are somewhere else
+volatile bool     s_newsReady = false; // headlines or a brief landed; see takeNewsReady()
 
 float query_radius_km() {
     float km = s_settings.rangeKm * ADSB_QUERY_MULT;
@@ -119,6 +121,9 @@ void net_task(void *) {
         // The radar asked for a route (an aircraft was selected): one lookup, here, between
         // polls, as src/net/net_task.cpp does it.
         if (conn) routes::service();
+        // Headlines: fetchStep() keeps its own time and returns at once when nothing is due,
+        // as on Arduino's network task (src/net/net_task.cpp).
+        if (conn && intelview::fetchStep()) s_newsReady = true;
         const bool radarActive = theme_style::apps().flight;
         if (conn && radarActive) {
             const uint32_t nowMs = millis();
@@ -223,6 +228,12 @@ void flight::begin() {
 }
 
 void flight::setVisible(bool on) { s_visible = on; }
+
+bool flight::takeNewsReady() {
+    if (!s_newsReady) return false;
+    s_newsReady = false;
+    return true;
+}
 
 double flight::homeLat() { return s_settings.homeLat; }
 double flight::homeLon() { return s_settings.homeLon; }
