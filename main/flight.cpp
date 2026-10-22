@@ -31,6 +31,7 @@
 #include "location.h"
 #include "routes.h"
 #include "intel_view.h"
+#include "yr_fetch.h"
 
 namespace {
 
@@ -124,6 +125,9 @@ void net_task(void *) {
         // Headlines: fetchStep() keeps its own time and returns at once when nothing is due,
         // as on Arduino's network task (src/net/net_task.cpp).
         if (conn && intelview::fetchStep()) s_newsReady = true;
+        // The Weather app's forecast (main/yr.cpp): due every ten minutes, or when the
+        // location moves; the screen picks it up by itself.
+        if (conn) yr_service();
         const bool radarActive = theme_style::apps().flight;
         if (conn && radarActive) {
             const uint32_t nowMs = millis();

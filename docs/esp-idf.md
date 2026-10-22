@@ -46,7 +46,7 @@ place of their own.
 | SD card (SPI, 20/10/4 MHz negotiation, never formats) | |
 | Settings in NVS, same keys as Arduino, never erases | Some settings: what the clock, the scope and Settings use is read |
 | RTC seeds the clock at boot | NTP, writing NTP time back to the RTC |
-| Clock, Flight Tracker, Headlines (NRK and VG) and Settings apps, theme, splash | The web server |
+| Clock, Flight Tracker, Headlines (NRK and VG), Weather (MET Norway) and Settings apps, theme, splash | The web server |
 | WiFi: several saved networks, fallback, backoff, "The Orb Setup", joining with the knob; NTP; the aircraft feed over verified HTTPS | Forgetting a network from the screen |
 | One HTTPS client task (`orb_net`): the feed, flight routes, Settings > Location (search, recents, IP lookup) | Settings > Reset erases nothing (stage 10) |
 | | Audio (a stub reporting no codec), IMU, battery, idle dimming |
@@ -99,7 +99,7 @@ firmware does, because it still uses all of them and the simulator builds two
 **The stages after this one, in the plan's order:** the setup portal, joining and saving
 networks (3, done); one HTTPS client task (4, done); themes v2 and baking on ESP-IDF (5, done);
 Nordic fonts (6, done); NRK and VG news, which brought Headlines back (7, done); yr.no weather
-(8); radio and the ES8311 (9); Settings, auth and OTA (10); CI (11). Smaller gaps from this stage, none of them in the plan's list,
+(8, done); radio and the ES8311 (9); Settings, auth and OTA (10); CI (11). Smaller gaps from this stage, none of them in the plan's list,
 are in "What runs, and what does not yet" above. Two are worth measuring rather than
 leaving: the QSPI clock (40 MHz here, 80 on Arduino) and PNGdec's C path.
 
@@ -230,6 +230,25 @@ a story's summary, Settings > News cycling the sources, the third credit line in
 
 Not done, on purpose: the plan's rename of `intel` to `news`. Those files are shared with the
 Arduino firmware, which still reads the gateway through them; the rename goes with Arduino.
+
+## Stage 8: Weather from MET Norway (2026-10-22)
+
+A new Weather app (`docs/weather.md`): now, then a wheel of the next 12 hours and 7 days, from
+MET Norway's Locationforecast for the Orb's location (`main/yr.cpp` fetches through `orb_net`;
+`src/yr_view.cpp` draws, in the simulator too with `--yrshot`). Twelve plain icons drawn by
+`tools/make_weather_icons.py`, in the theme's colour. Wind in m/s.
+
+- MET's terms: the User-Agent on ESP-IDF names this fork (`ORB_USER_AGENT`, every service gets
+  it), coordinates to four decimals, `Expires`/`If-Modified-Since` through the cache, at most one
+  request in ten minutes. Credited under the forecast and on About.
+- A Weather slot after Headlines (`app_shell::Slot`, ESP-IDF only). Shown by default; an Orb
+  Studio theme's `weather` flag and name meant the old radar app and are ignored here.
+
+Also fixed on the way (its own commit): the hand-drawn text paths looked glyphs up a byte at a
+time, so after stage 6 "ø" drew as "Ã¸" in themed text. They decode UTF-8 now (`src/orb_utf8.h`).
+
+Seen on the Orb: a live forecast (35 KB, 0.6 s), now, the hours and the days on the wheel, a
+press back to now, the MET credit on About.
 
 ## The toolchain: `idf.py`, ESP-IDF v5.5.6
 

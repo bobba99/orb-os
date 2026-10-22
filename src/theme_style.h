@@ -950,6 +950,15 @@ struct Weather {
     // art was doing, which is the whole reason the Flight Tracker got them first.
     Zone     zones[MAX_ZONES];
     int      zoneCount       = 0;
+
+    // The MET Norway forecast screen (yr_view.cpp, ESP-IDF stage 8). Its own keys, because
+    // everything above belongs to the old radar Weather app: text, quieter text (labels,
+    // the credit), the accent (the selected row, the temperature's degree mark) and the
+    // icons' colour. The background is `bg` above, or the theme's weather_plate.png.
+    uint32_t yrText   = 0xE8ECF0;
+    uint32_t yrDim    = 0x7C8590;
+    uint32_t yrAccent = 0xFF6A3D;
+    uint32_t yrIcon   = 0xE8ECF0;
 };
 
 struct Radar {

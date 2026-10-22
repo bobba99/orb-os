@@ -52,6 +52,7 @@
 #include "radar_view.h"
 #include "settings_view.h"
 #include "intel_view.h"
+#include "yr_view.h"
 #include "chime_library.h"
 #include "ui.h"
 
@@ -233,6 +234,12 @@ extern "C" void app_main(void) {
                        intelview::build, intelview::destroy,
                        intelview::onPress, intelview::onTurn, false,
                        intelview::onEnter, intelview::onExit, !theme_style::apps().headlines);
+    // Weather: MET Norway's forecast (main/yr.cpp feeds src/yr_view.cpp), after Headlines as
+    // app_shell::Slot has it.
+    app_shell::addLazy(theme_style::names().weather,
+                       yrview::build, yrview::destroy,
+                       yrview::onPress, yrview::onTurn, false,
+                       yrview::onEnter, nullptr, !theme_style::apps().weather);
     // Built the first time it is opened, as src/main.cpp registers it.
     app_shell::addLazy(theme_style::names().settings,
                        settingsview::build, settingsview::destroy,
@@ -276,8 +283,8 @@ extern "C" void app_main(void) {
     // Core 1 with LVGL, as Arduino's loop() ran; core 0 stays free for the network.
     xTaskCreatePinnedToCore(app_loop, "app", 8192, nullptr, 5, nullptr, 1);
 
-    printf("setup done (firmware %s, ESP-IDF stage 5)\n", FW_VERSION);
-    printf("not ported yet: weather, photos,\n"
+    printf("setup done (firmware %s, ESP-IDF stage 8)\n", FW_VERSION);
+    printf("not ported yet: photos,\n"
            "  audio (ES8311), IMU and battery, idle dimming, mDNS and the web server,\n"
            "  factory reset\n");
 }
