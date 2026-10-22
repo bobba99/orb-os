@@ -91,24 +91,7 @@ void host_set_idle_ms(uint32_t ms) {
     orb_prefs::putUInt("idledim", ms);
 }
 
-// --- location --------------------------------------------------------------------------
-
-// The place's name for the flight tracker's location line and Settings > Location: the
-// same NVS key src/location.cpp saves it under. False when nothing has ever named it.
-bool host_location_name(char *out, size_t n) {
-    if (!n) return false;
-    return orb_prefs::getString("homeName", out, n) && out[0];
-}
-
-// Setting the location, the city search, recents and IP lookup all go over HTTPS to services
-// stage 4 (feature/net-client) brings in. Until then Location shows where the Orb is and
-// changes nothing: no search results, no recents, and the lookup reports failure.
-void host_set_location(double, double) { printf("[host] setting the location: not ported (stage 4)\n"); }
-void host_set_location_named(const char *, double, double) { host_set_location(0, 0); }
-bool host_locate_current() { return false; }
-int  host_geocode(const char *, char[][40], double *, double *, int) { return 0; }
-int  host_recents_get(char[][40], double *, double *, int) { return 0; }
-void host_recents_add(const char *, double, double) {}
+// --- location: location.cpp ------------------------------------------------------------
 
 // --- sound: saved, applied to the audio stub, heard once audio is ported -----------------
 

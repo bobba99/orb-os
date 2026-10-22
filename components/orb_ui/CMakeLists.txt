@@ -8,7 +8,7 @@
 #
 # The list is the clock's, the flight tracker's (stage 2) and Settings' (stage 3). Hardware
 # drivers are not here (display, knob, sdcard, audio and diag_log have ESP-IDF versions in
-# their own components). adsb_client fetches through orb_http on ESP-IDF.
+# their own components). adsb_client fetches through orb_net on ESP-IDF.
 set(ORB_SRC "${CMAKE_CURRENT_LIST_DIR}/../../src")
 set(SHARED
     app_shell.cpp app_theme.cpp input_router.cpp knob_help.cpp update_ui.cpp
@@ -26,7 +26,7 @@ set(SHARED
 list(TRANSFORM SHARED PREPEND "${ORB_SRC}/")
 idf_component_register(SRCS ${SHARED}
                        REQUIRES orb_shared lvgl
-                       PRIV_REQUIRES pngdec orb_prefs orb_sdcard orb_audio orb_http orb_wifi esp_timer
+                       PRIV_REQUIRES pngdec orb_prefs orb_sdcard orb_audio orb_net orb_wifi esp_timer
                                     esp_partition spi_flash)
 # The shared files are held to the warning policy of the builds they came from, where a
 # warning is reported and not fatal. They are compiled with every warning on and looked at;

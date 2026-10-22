@@ -7,7 +7,8 @@
 //                 photos are not ported)
 //   hand-off      src/main.cpp loop(), the snapshot swap and the catch-up render
 //   query radius  src/app_hooks.cpp queryRadiusKm() and deadZoneKm()
-// Settings writes one of these, the range, through setRangeKm(); the rest are read-only here.
+// Settings changes two of these, the range (setRangeKm) and the centre (setHome, by way of
+// location.cpp); the rest are read-only here.
 #include "flight.h"
 
 #include <map>
@@ -27,6 +28,8 @@
 #include "display_idf.h"
 #include "orb_prefs.h"
 #include "orb_wifi.h"
+#include "location.h"
+#include "routes.h"
 
 namespace {
 
@@ -46,7 +49,8 @@ std::vector<Aircraft>            s_snap;       // core 1 draws from this
 volatile bool     s_dirty = false;
 volatile bool     s_visible = false;
 volatile uint32_t s_lastFeedOkMs = 0;
-volatile bool     s_requery = false;   // the range changed: begin() again at the new radius
+volatile bool     s_requery = false;   // range or centre changed: begin() again
+volatile bool     s_dropTable = false; // the centre moved: the old contacts are somewhere else
 
 float query_radius_km() {
     float km = s_settings.rangeKm * ADSB_QUERY_MULT;
@@ -97,8 +101,24 @@ void net_task(void *) {
             s_requery = false;
             s_adsb.begin(s_settings.homeLat, s_settings.homeLon, query_radius_km());
             lastPoll = 0;   // poll at once at the new radius
+            if (s_dropTable && xSemaphoreTake(s_mutex, pdMS_TO_TICKS(200)) == pdTRUE) {
+                s_dropTable = false;
+                s_table.clear();
+                s_aircraft.clear();
+                s_dirty = true;
+                xSemaphoreGive(s_mutex);
+            }
         }
         const bool conn = orb_wifi::connected();
+        // src/main.cpp host_locate_if_unset(): one lookup per boot, once there is a network.
+        static bool locateTried = false;
+        if (conn && !locateTried) {
+            locateTried = true;
+            location::locateIfUnset();
+        }
+        // The radar asked for a route (an aircraft was selected): one lookup, here, between
+        // polls, as src/net/net_task.cpp does it.
+        if (conn) routes::service();
         const bool radarActive = theme_style::apps().flight;
         if (conn && radarActive) {
             const uint32_t nowMs = millis();
@@ -198,8 +218,7 @@ void flight::applySettings() {
 void flight::begin() {
     s_mutex = xSemaphoreCreateMutex();
     s_adsb.begin(s_settings.homeLat, s_settings.homeLon, query_radius_km());
-    // 8 KB rather than the Arduino task's 7: TLS runs on this task's stack here (orb_http),
-    // where Arduino's ran partly in WiFiClientSecure's. Measure before trimming.
+    // TLS and the parse run on orb_net's client task now; this one waits for them.
     xTaskCreatePinnedToCore(net_task, "net", 8192, nullptr, 1, nullptr, 0);
 }
 
@@ -208,6 +227,15 @@ void flight::setVisible(bool on) { s_visible = on; }
 double flight::homeLat() { return s_settings.homeLat; }
 double flight::homeLon() { return s_settings.homeLon; }
 float  flight::rangeKm() { return s_settings.rangeKm; }
+bool   flight::locationSet() { return s_locationSet; }
+
+void flight::setHome(double lat, double lon) {
+    s_settings.homeLat = lat;
+    s_settings.homeLon = lon;
+    s_locationSet = true;
+    s_dropTable = true;
+    s_requery = true;
+}
 
 void flight::setRangeKm(float km) {
     s_settings.rangeKm = km;

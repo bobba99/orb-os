@@ -29,6 +29,11 @@ uint32_t lastFeedOkMs();   // millis() of the last good poll, 0 if none yet
 
 double homeLat();
 double homeLon();
+bool   locationSet();   // false until a position has been saved (NVS "locSet")
+
+// Move the scope to a new centre while the Orb runs: the feed is asked again around it and
+// the old contacts are dropped. Saving it is the caller's job (location.cpp).
+void setHome(double lat, double lon);
 
 // Settings > Range. src/app_hooks.cpp onRangeChange(): saved, the scope redrawn at once from
 // the last snapshot, and the feed asked again at the new radius. Display lock held.

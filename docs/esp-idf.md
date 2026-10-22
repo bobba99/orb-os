@@ -48,7 +48,7 @@ place of their own.
 | RTC seeds the clock at boot | NTP, writing NTP time back to the RTC |
 | Clock, Flight Tracker and Settings apps, theme, splash | Headlines (its slot is held by a hidden empty screen), the web server |
 | WiFi: several saved networks, fallback, backoff, "The Orb Setup", joining with the knob; NTP; the aircraft feed over verified HTTPS | Forgetting a network from the screen |
-| | Settings > Location changes nothing (search, recents, IP lookup: stage 4); Settings > Reset erases nothing (stage 10) |
+| One HTTPS client task (`orb_net`): the feed, flight routes, Settings > Location (search, recents, IP lookup) | Settings > Reset erases nothing (stage 10) |
 | | Audio (a stub reporting no codec), IMU, battery, idle dimming |
 | Baked theme art and fonts, read from the themeart partition | Baking: a theme installed or changed is not re-baked yet |
 
@@ -97,14 +97,13 @@ firmware does, because it still uses all of them and the simulator builds two
 (`ticker_client`, `intel_client`). They go when the Arduino build is retired.
 
 **Left for later stages, in the order the plan has them:** the setup portal, joining and
-saving networks (3); one HTTPS client task with typed queues, which also removes the
-shared-state globals (4); themes v2 and baking on ESP-IDF (5); Nordic fonts (6); NRK news,
+saving networks (3, done); one HTTPS client task (4, done); themes v2 and baking on ESP-IDF (5); Nordic fonts (6); NRK news,
 which brings Headlines back (7); yr.no weather (8); radio and the ES8311 (9); Settings,
 auth and OTA (10); CI (11). Smaller gaps from this stage, none of them in the plan's list,
 are in "What runs, and what does not yet" above. Two are worth measuring rather than
 leaving: the QSPI clock (40 MHz here, 80 on Arduino) and PNGdec's C path.
 
-## Stage 3: WiFi, in progress (2026-10-22)
+## Stage 3: WiFi, done (2026-10-22)
 
 `components/orb_wifi` is an event-driven state machine on `esp_event`: IDLE, CONNECTING,
 CONNECTED, BACKOFF, PROVISIONING. One manager task on core 0 makes every decision; its header
@@ -122,13 +121,50 @@ and never written; a network is saved only once it has produced an address).
 
 Seen on the Orb: the list seeded, fallback, the backoff ladder, rejoining after the link went,
 the setup network opening and listing networks, a wrong password refused with the saved
-networks left as they were, and a join with the knob. **Not seen yet:** a join from the setup
-page, and the setup network closing after it.
+networks left as they were, and a join with the knob. Merged without seeing a join from the
+setup page, or the setup network closing after it.
 
 **A router that announces a channel switch and stays put** makes any ESP32 drop every few
 seconds: the Orb follows the announcement (`sta rx csa, newchan=8, old=6`), hears no beacons
 on the new channel, and leaves with reason 200. ESP-IDF has no setting to ignore the
 announcement. The cure is on the router: give its 2.4 GHz radio a fixed channel.
+
+## Stage 4: one HTTPS client (2026-10-22)
+
+`components/orb_net` replaces `orb_http`. One task on core 0 takes requests from a queue, so only
+one TLS session is ever open; `fetch()` blocks its caller until the answer is in. Its header has
+the rules (no `fetch()` from a handler, no display lock in a handler).
+
+- **Streaming:** a request's handler reads the body as it arrives (`orb_net::Body` is an
+  ArduinoJson reader), so the aircraft feed is parsed off the socket with its filter instead of
+  being buffered whole. XML (stage 7) goes through expat the same way.
+- **Freshness:** a `cached` request is not sent while `max-age` or `Expires` (against the
+  server's own `Date`) says the last answer holds, and is revalidated with `If-None-Match` /
+  `If-Modified-Since` after; validators live in RAM, 24 URLs.
+- **Memory caps:** each app's documents come from its own PSRAM allocator with a cap.
+- **Results to the UI** go through each app's own hand-off (the flight snapshot,
+  `route_store()`); the city search is synchronous because Settings' interface is.
+
+On it so far:
+
+- **The aircraft feed**, as before.
+- **Location** (`main/location.cpp`): Open-Meteo city search; the IP lookup from ipapi.co,
+  falling back to ipwho.is (ip-api.com, which Arduino used, refuses HTTPS without a paid key);
+  recents under the Arduino key. A place is applied while the Orb runs and the Flight Tracker
+  comes up; nothing restarts. The timezone keeps its daylight-saving rule for ~40 common zones
+  and falls back to Arduino's fixed offset elsewhere. A never-located Orb asks once per boot.
+- **Flight routes** (`main/routes.cpp`) without the gateway: adsb.lol's static file per
+  callsign (`vrs-standing-data.adsb.lol/routes/XX/CALLSIGN.json`; its `/api/0/route` redirects
+  there and `routeset` answers empty), showing the first and last IATA code. Ten minutes'
+  freshness and an ETag, so the cache does real work; the answers are kept in RAM.
+
+Seen on the Orb (phone hotspot): the feed, an IP lookup with its timezone, the city search and
+picking a place, and routes from the network and from the cache. Measured: the client task's
+stack has at least 5.3 KB of its 10 KB left after a handshake and a parse; the largest free
+internal block fell to 11-16 KB with Settings built, and handshakes still succeeded.
+
+IP geolocation is only as good as the network's address: over a phone it found the carrier's
+city, not the Orb's. Settings > Location > Search is the cure.
 
 ## The toolchain: `idf.py`, ESP-IDF v5.5.6
 
