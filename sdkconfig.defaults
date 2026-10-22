@@ -43,6 +43,13 @@ CONFIG_MBEDTLS_CERTIFICATE_BUNDLE_DEFAULT_FULL=y
 # only", which would also put key material in PSRAM; ESP-IDF calls that safe only with
 # flash encryption on, and this device does not have it.
 CONFIG_MBEDTLS_DEFAULT_MEM_ALLOC=y
+# Software AES. The hardware AES unit works by DMA, and DMA cannot reach PSRAM, so for every
+# record in a PSRAM buffer it allocates a bounce buffer in internal DMA memory. With Settings
+# open (hundreds of small LVGL objects in internal RAM, lv_psram_alloc.h) the largest internal
+# block fell to 7-9 KB, that allocation failed ("esp-aes: Failed to allocate memory") and the
+# read with it: city searches came back empty, 2026-10-22. Software AES allocates nothing,
+# and these replies are a few KB; at 240 MHz it costs well under a millisecond each.
+CONFIG_MBEDTLS_HARDWARE_AES=n
 
 # --- Time ------------------------------------------------------------------------------
 # Two NTP servers, as configTzTime() had on Arduino (components/orb_wifi). The default is one.
