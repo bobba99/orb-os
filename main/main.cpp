@@ -34,6 +34,8 @@
 #include "orb_net.h"
 #include "flight.h"
 #include "host.h"
+#include "theme_check.h"
+#include "dev_themes.h"
 
 #include "app_shell.h"
 #include "app_theme.h"
@@ -248,18 +250,22 @@ extern "C" void app_main(void) {
     // building the apps and blocks on it; here the clock is up first and the network follows.
     orb_wifi::begin();
     orb_net::begin();   // the one HTTPS client task; every request goes through it
+    dev_themes::start();   // development builds only (CONFIG_ORB_DEV_THEME_URL)
     flight::begin();
 
     // src/main.cpp: a card notice, or WiFi setup, instead of the clock. Setup is owed when the
     // Orb knows no network at all, or after an Arduino Settings > Reset. "The Orb Setup" opens
     // as well in that case (orb_wifi), so the phone and the knob are both on offer.
     const bool wantWifiSetup = orb_wifi::savedCount() == 0 || orb_prefs::getBool("needsWifiSetup", false);
-    if (!sdcard::mounted() || wantWifiSetup) {
+    // Then a theme that did not load whole, which matters less than either of those.
+    const char *themeProblem = sdcard::mounted() ? theme_check::run() : nullptr;
+    if (!sdcard::mounted() || wantWifiSetup || themeProblem) {
         display_idf::lock();
         app_shell::selectApp(app_shell::APP_SETTINGS);
         app_shell::setCaptured(true);   // Settings captures the knob on entry; match that
-        if (!sdcard::mounted()) settingsview::openNoSdCardNotice(wantWifiSetup);
-        else                    settingsview::openWifiSetupPrompt();
+        if (!sdcard::mounted())  settingsview::openNoSdCardNotice(wantWifiSetup);
+        else if (wantWifiSetup)  settingsview::openWifiSetupPrompt();
+        else                     settingsview::openThemeProblem(themeProblem);
         display_idf::unlock();
     }
 

@@ -40,4 +40,14 @@ menu "The Orb OS"
         string "Password for the development network (empty for an open network)"
         default ""
 
+    config ORB_DEV_THEME_URL
+        string "Download themes from this address at boot (development only)"
+        default ""
+        help
+            Where `python3 tools/theme_tool.py serve <folders>` is running, e.g.
+            "http://192.168.10.20:8000". Once WiFi is up the Orb copies every theme listed
+            there into /themes/ on the card (main/dev_themes.cpp), then they can be chosen in
+            Settings > Theme. Plain HTTP on the local network: set it only in the git-ignored
+            sdkconfig.dev, never in sdkconfig.defaults.
+
 endmenu

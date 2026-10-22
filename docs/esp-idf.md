@@ -97,7 +97,7 @@ firmware does, because it still uses all of them and the simulator builds two
 (`ticker_client`, `intel_client`). They go when the Arduino build is retired.
 
 **Left for later stages, in the order the plan has them:** the setup portal, joining and
-saving networks (3, done); one HTTPS client task (4, done); themes v2 and baking on ESP-IDF (5); Nordic fonts (6); NRK news,
+saving networks (3, done); one HTTPS client task (4, done); themes (5, done); themes v2 and baking on ESP-IDF (5); Nordic fonts (6); NRK news,
 which brings Headlines back (7); yr.no weather (8); radio and the ES8311 (9); Settings,
 auth and OTA (10); CI (11). Smaller gaps from this stage, none of them in the plan's list,
 are in "What runs, and what does not yet" above. Two are worth measuring rather than
@@ -165,6 +165,28 @@ internal block fell to 11-16 KB with Settings built, and handshakes still succee
 
 IP geolocation is only as good as the network's address: over a phone it found the carrier's
 city, not the Orb's. Settings > Location > Search is the cure.
+
+## Stage 5: themes (2026-10-22)
+
+The theme format is this fork's own, written down in `docs/themes.md`: schema 1 is the folder
+layout Orb Studio exported, with `"schema": 1` in `theme.json` in place of `THEME_CAPS`.
+
+- **Theme art store** (`components/orb_ui/themeart/`), layout version 9, ESP-IDF only (Arduino
+  keeps `src/theme_art.cpp`): pictures stored once however many screens or themes use them,
+  freed room reused, art of themes gone from the card reclaimed at boot. The baker stores a
+  picture of 256 colours or fewer as an LVGL indexed image and checks every pixel first; it
+  also bakes the splash and radar glass, rings, shadows and winding screen, which Arduino read
+  off the card each time. Cold War: 4.1 MB before, 2.36 MB now, with more of it baked.
+- **A theme that does not load whole** is named on a system screen at boot
+  (`main/theme_check.cpp`).
+- **Tools:** `tools/theme_tool.py` (validate, estimate, preview, keys, serve) and
+  `tools/make_default_theme.py`, which writes the shipped default `themes/orb-plain/`.
+- **Development:** `CONFIG_ORB_DEV_THEME_URL` copies themes from a computer over WiFi.
+
+Seen on the Orb: the Cold War rebake and every screen of it; Plain (bake 668 KB against the
+tool's 0.65 MB estimate); a copy of Plain stored with no extra bytes; the error screen for a
+schema-2 theme. Not done: running `theme_tool.py validate` on a real Orb Studio theme, which
+needs the card in a computer. Left for later: skipping the round screen's invisible corners.
 
 ## The toolchain: `idf.py`, ESP-IDF v5.5.6
 

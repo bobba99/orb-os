@@ -52,3 +52,8 @@ themes/unpacked/
 
 # A development network for testing away from the Orb's saved one (main/Kconfig.projbuild).
 sdkconfig.dev
+
+# tools/theme_tool.py preview: the simulator's copy of the theme and its screenshots
+sim/sdcard/
+sim/shots/
+__pycache__/

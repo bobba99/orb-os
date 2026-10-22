@@ -1,0 +1,19 @@
+{
+  "sweepEnabled": true,
+  "sweepTypeImage": false,
+  "sweepColor": 16738877,
+  "sweepLeadColor": 16765634,
+  "sweepOpacity": 40,
+  "sweepHubOn": false,
+  "blipEnabled": true,
+  "blipTypeImage": false,
+  "blipKiteShape": true,
+  "blipSize": 9,
+  "blipFixedColorMode": true,
+  "blipFixedColor": 15265008,
+  "blipGlow": 0,
+  "centerEnabled": true,
+  "centerColor": 16738877,
+  "centerInnerColor": 724498,
+  "selColor": 16738877
+}

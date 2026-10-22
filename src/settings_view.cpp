@@ -76,7 +76,7 @@ namespace {
     enum Mode { MODE_MENU, MODE_DISPLAY, MODE_BRIGHT, MODE_LOCATION, MODE_RECENT, MODE_SEARCH, MODE_SOUND, MODE_VOLUME, MODE_ABOUT,
                 MODE_WIFI_LIST, MODE_WIFI_PASSWORD, MODE_WIFI_STATUS, MODE_RESET_CONFIRM, MODE_UNITS, MODE_CHIME_SELECT,
                 MODE_THEME_SELECT, MODE_THEME_NOTICE, MODE_DESIGN_SELECT, MODE_DESIGN_NOTICE, MODE_RANGE,
-                MODE_FIRSTBOOT, MODE_FIRSTBOOT_PHONE, MODE_NO_SDCARD };
+                MODE_FIRSTBOOT, MODE_FIRSTBOOT_PHONE, MODE_NO_SDCARD, MODE_THEME_PROBLEM };
 
     // --- main settings menu ---
     // ITEM_RANGE was added when touch (and with it the on-screen zoom button) was
@@ -418,6 +418,8 @@ namespace {
     // trapping somebody on this notice would break a working Orb to report a degraded one.
     // Said once, unmissably, at the only moment it is actionable.
     lv_obj_t *s_noSdPage = nullptr;
+    lv_obj_t *s_themeProblemPage = nullptr;   // a theme that did not load whole; see openThemeProblem()
+    lv_obj_t *s_themeProblemText = nullptr;
 
     // Is the page currently on screen part of the path from "no network" to "network"?
     // Those screens are SYSTEM CHROME: fixed white on black, the compiled font, no theme
@@ -442,7 +444,7 @@ namespace {
     bool s_systemChrome = false;
     bool s_systemChromeFwd() { return s_systemChrome; }
     bool mode_is_system_chrome(Mode m) {
-        return m == MODE_NO_SDCARD  || m == MODE_FIRSTBOOT      || m == MODE_FIRSTBOOT_PHONE
+        return m == MODE_NO_SDCARD  || m == MODE_THEME_PROBLEM || m == MODE_FIRSTBOOT      || m == MODE_FIRSTBOOT_PHONE
             || m == MODE_WIFI_LIST  || m == MODE_WIFI_PASSWORD  || m == MODE_WIFI_STATUS;
     }
 
@@ -1017,6 +1019,7 @@ namespace {
         lv_obj_add_flag(s_fbPage, LV_OBJ_FLAG_HIDDEN);
         lv_obj_add_flag(s_fbPhonePage, LV_OBJ_FLAG_HIDDEN);
         lv_obj_add_flag(s_noSdPage, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(s_themeProblemPage, LV_OBJ_FLAG_HIDDEN);
         lv_obj_add_flag(s_wifiListPage, LV_OBJ_FLAG_HIDDEN);
         lv_obj_add_flag(s_wifiPassPage, LV_OBJ_FLAG_HIDDEN);
         lv_obj_add_flag(s_wifiStatusPage, LV_OBJ_FLAG_HIDDEN);
@@ -1040,6 +1043,7 @@ namespace {
         else if (m == MODE_FIRSTBOOT)       { lv_obj_clear_flag(s_fbPage, LV_OBJ_FLAG_HIDDEN); refresh_firstboot(); }
         else if (m == MODE_FIRSTBOOT_PHONE) { lv_obj_clear_flag(s_fbPhonePage, LV_OBJ_FLAG_HIDDEN); }
         else if (m == MODE_NO_SDCARD)       { lv_obj_clear_flag(s_noSdPage, LV_OBJ_FLAG_HIDDEN); }
+        else if (m == MODE_THEME_PROBLEM)   { lv_obj_clear_flag(s_themeProblemPage, LV_OBJ_FLAG_HIDDEN); }
         else if (m == MODE_WIFI_LIST)     { lv_obj_clear_flag(s_wifiListPage, LV_OBJ_FLAG_HIDDEN); refresh_wifi_list(); }
         else if (m == MODE_WIFI_PASSWORD) { lv_obj_clear_flag(s_wifiPassPage, LV_OBJ_FLAG_HIDDEN); refresh_wifi_pass(); }
         else if (m == MODE_WIFI_STATUS)   { lv_obj_clear_flag(s_wifiStatusPage, LV_OBJ_FLAG_HIDDEN); }
@@ -1397,7 +1401,8 @@ void settingsview::onTurn(int delta) {
         // ONE PAGE of it: you came here from the list and the list is where back means.
         s_sel = ITEM_ABOUT;      // land on the row you left from, not at the top
         show_page(MODE_MENU);
-    } else if (s_mode == MODE_WIFI_STATUS || s_mode == MODE_THEME_NOTICE || s_mode == MODE_DESIGN_NOTICE) {
+    } else if (s_mode == MODE_WIFI_STATUS || s_mode == MODE_THEME_NOTICE || s_mode == MODE_DESIGN_NOTICE ||
+               s_mode == MODE_THEME_PROBLEM) {
         // static pages — turning does nothing here
     } else if (s_mode == MODE_RESET_CONFIRM) {
         s_sel = ITEM_RESET;      // turning either way backs out — this page is confirm/cancel only
@@ -1468,6 +1473,11 @@ void settingsview::onPress() {
         } else {
             show_page(MODE_FIRSTBOOT_PHONE);
         }
+        return;
+    }
+    if (s_mode == MODE_THEME_PROBLEM) {   // said once; carry on with what did load
+        app_shell::setCaptured(false);
+        app_shell::openSwitcher();
         return;
     }
     if (s_mode == MODE_NO_SDCARD) {
@@ -1933,6 +1943,35 @@ void settingsview::init() {
     lv_obj_set_style_text_color(sdHint, C_GREY, 0);
     lv_obj_set_style_text_font(sdHint, &lv_font_montserrat_18, 0);
     lv_obj_align(sdHint, LV_ALIGN_CENTER, 0, 130);
+
+    // --- the theme did not load whole (theme_check on ESP-IDF) ---
+    // System chrome like the page above, and for the same reason: the theme is the thing
+    // that is broken, so it must not be the thing that draws this.
+    s_themeProblemPage = lv_obj_create(s_screen);
+    lv_obj_remove_style_all(s_themeProblemPage);
+    lv_obj_set_size(s_themeProblemPage, SCREEN_W, SCREEN_H); lv_obj_center(s_themeProblemPage);
+    lv_obj_set_style_bg_color(s_themeProblemPage, lv_color_black(), 0);
+    lv_obj_set_style_bg_opa(s_themeProblemPage, LV_OPA_COVER, 0);
+    lv_obj_clear_flag(s_themeProblemPage, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_t *tpTitle = lv_label_create(s_themeProblemPage);
+    lv_label_set_text(tpTitle, "This theme did not\nload completely");
+    lv_obj_set_style_text_color(tpTitle, lv_color_white(), 0);
+    lv_obj_set_style_text_font(tpTitle, &lv_font_montserrat_26, 0);
+    lv_obj_set_style_text_align(tpTitle, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_align(tpTitle, LV_ALIGN_CENTER, 0, -95);
+    s_themeProblemText = lv_label_create(s_themeProblemPage);
+    lv_label_set_long_mode(s_themeProblemText, LV_LABEL_LONG_WRAP);
+    lv_obj_set_width(s_themeProblemText, 340);
+    lv_label_set_text(s_themeProblemText, "");
+    lv_obj_set_style_text_color(s_themeProblemText, C_DIM, 0);
+    lv_obj_set_style_text_font(s_themeProblemText, &lv_font_montserrat_20, 0);
+    lv_obj_set_style_text_align(s_themeProblemText, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_align(s_themeProblemText, LV_ALIGN_CENTER, 0, 10);
+    lv_obj_t *tpHint = lv_label_create(s_themeProblemPage);
+    lv_label_set_text(tpHint, "push to carry on with the rest");
+    lv_obj_set_style_text_color(tpHint, C_GREY, 0);
+    lv_obj_set_style_text_font(tpHint, &lv_font_montserrat_18, 0);
+    lv_obj_align(tpHint, LV_ALIGN_CENTER, 0, 130);
 
     // --- recent cities page (single-item scroller) ---
     s_recPage = lv_obj_create(s_screen);
@@ -2547,6 +2586,12 @@ void settingsview::openNoSdCardNotice(bool alsoNeedsWifi) {
     s_pendingWifiSetup = alsoNeedsWifi;
     s_sel = ITEM_WIFI;
     show_page(MODE_NO_SDCARD);
+}
+
+void settingsview::openThemeProblem(const char *what) {
+    if (!s_screen || !what) return;   // not built; see the note above openNoSdCardNotice()
+    lv_label_set_text(s_themeProblemText, what);
+    show_page(MODE_THEME_PROBLEM);
 }
 
 void settingsview::openWifiSetupPrompt() {

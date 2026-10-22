@@ -27,7 +27,7 @@
 namespace orb_net {
 
 // Who asked: for the memory caps and the log.
-enum class App : uint8_t { Flight, Routes, Location, Weather, News, Radio, Count };
+enum class App : uint8_t { Flight, Routes, Location, Weather, News, Radio, Themes, Count };
 const char *appName(App a);
 
 // fetch()'s result: an HTTP status (200, 304, 404, ...), or one of these.
