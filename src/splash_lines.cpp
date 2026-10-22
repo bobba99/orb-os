@@ -5,6 +5,7 @@
 #include "curved_text.h"     // straight AND arc, one code path, glow included
 #include "font_ladder.h"     // the sizes this binary actually contains
 #include "splash_font.h"     // ...and Inter, for these three lines specifically
+#include "theme_art_lv.h"   // adopt(): the glass may be baked in an indexed format
 #include "custom_sprite.h"   // splash_overlay() — the glass, decoded flash-then-SD
 #include <stdio.h>
 #include <string.h>
@@ -154,6 +155,7 @@ void attach(lv_obj_t *parent) {
         s_glassDsc.header.cf = LV_IMG_CF_TRUE_COLOR_ALPHA;
         s_glassDsc.data_size = CANVAS_BYTES;
         s_glassDsc.data      = ov;
+        theme_art::adopt(s_glassDsc);   // baked indexed on ESP-IDF; see theme_art_lv.h
         s_glass = lv_img_create(parent);
         lv_img_set_src(s_glass, &s_glassDsc);
         lv_obj_center(s_glass);

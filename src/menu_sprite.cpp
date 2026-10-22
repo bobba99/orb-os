@@ -26,7 +26,7 @@ static void heap_caps_free(void *p) { free(p); }
 #include "theme_sd.h"   // theme_sd::read_whole/free — SD-hosted plate/overlay, one rung above flash
 #include "theme_select.h"   // theme_select::activeSlug() — which /themes/<slug>/ folder to read from
 #include "theme_style.h"   // hasAsset() — ignore files the theme does not declare
-#include "theme_art.h"      // pre-baked RGB565 in flash — tried before the card, costs nothing
+#include "theme_art_lv.h"   // baked art in flash, in any format LVGL draws — tried before the card
 
 namespace {
 
@@ -107,13 +107,14 @@ uint8_t     *s_plateBuf = nullptr;   lv_img_dsc_t s_plateDsc;   bool s_plateTrie
 uint8_t     *s_overlayBuf = nullptr; lv_img_dsc_t s_overlayDsc; bool s_overlayTried = false;
 // Try the pre-baked copy in flash before touching the card. A hit costs nothing at all:
 // no SD read (226 ms), no PNG decode (205 ms), no PSRAM (424 KB). See theme_art.h.
-bool plate_from_flash(uint8_t *&out, int &w, int &h) {
-    const uint8_t *p = nullptr;
-    theme_art::Format fmt = theme_art::FMT_RGB565;
-    if (!theme_art::lookup(theme_select::activeSlug(), "menu_plate.png", p, w, h, fmt)) return false;
-    if (fmt != theme_art::FMT_RGB565) return false;   // plate is drawn as TRUE_COLOR
+// Whatever format it was baked in: the description is put right by theme_art::adopt().
+bool from_flash(const char *assetName, bool alpha, uint8_t *&out, int &w, int &h, const char *tag) {
+    theme_art::Format fmt;
+    const uint8_t *p = theme_art::find_active_any(
+        assetName, alpha ? theme_art::FMT_RGB565_ALPHA : theme_art::FMT_RGB565, w, h, fmt);
+    if (!p) return false;
     out = (uint8_t *)p;
-    Serial.printf("[menu_sprite] plate: flash-resident %dx%d (0 ms, 0 KB PSRAM)\n", w, h);
+    Serial.printf("[menu_sprite] %s: flash-resident %dx%d (0 ms, 0 KB PSRAM)\n", tag, w, h);
     return true;
 }
 
@@ -123,7 +124,7 @@ const lv_img_dsc_t *menu_custom_plate() {
     if (!s_plateTried) {
         s_plateTried = true;
         int w = 0, h = 0;
-        bool ok = plate_from_flash(s_plateBuf, w, h);
+        bool ok = from_flash("menu_plate.png", false, s_plateBuf, w, h, "plate");
         if (!ok) {
 #if CUSTOM_HAS_MENU_PLATE
             ok = decode_sd_first("menu_plate.png", CUSTOM_MENU_PLATE_PNG, CUSTOM_MENU_PLATE_PNG_LEN, false, s_plateBuf, w, h, "plate");
@@ -138,6 +139,7 @@ const lv_img_dsc_t *menu_custom_plate() {
             s_plateDsc.header.cf = LV_IMG_CF_TRUE_COLOR;
             s_plateDsc.data_size = (uint32_t)w * h * 2;
             s_plateDsc.data = s_plateBuf;
+            theme_art::adopt(s_plateDsc);
         }
     }
     if (s_plateBuf) return &s_plateDsc;
@@ -148,10 +150,13 @@ const lv_img_dsc_t *menu_custom_overlay() {
     if (!s_overlayTried) {
         s_overlayTried = true;
         int w = 0, h = 0;
+        // Flash first, like the plate. This went straight to the card, so the bake's copy was
+        // never used and every open of the menu decoded 636 KB of glass off the SD card.
+        bool ok = from_flash("menu_overlay.png", true, s_overlayBuf, w, h, "overlay");
 #if CUSTOM_HAS_MENU_OVERLAY
-        const bool ok = decode_sd_first("menu_overlay.png", CUSTOM_MENU_OVERLAY_PNG, CUSTOM_MENU_OVERLAY_PNG_LEN, true, s_overlayBuf, w, h, "overlay");
+        if (!ok) ok = decode_sd_first("menu_overlay.png", CUSTOM_MENU_OVERLAY_PNG, CUSTOM_MENU_OVERLAY_PNG_LEN, true, s_overlayBuf, w, h, "overlay");
 #else
-        const bool ok = decode_sd_first("menu_overlay.png", nullptr, 0, true, s_overlayBuf, w, h, "overlay");
+        if (!ok) ok = decode_sd_first("menu_overlay.png", nullptr, 0, true, s_overlayBuf, w, h, "overlay");
 #endif
         if (ok) {
             s_overlayDsc.header.always_zero = 0;
@@ -160,6 +165,7 @@ const lv_img_dsc_t *menu_custom_overlay() {
             s_overlayDsc.header.cf = LV_IMG_CF_TRUE_COLOR_ALPHA;
             s_overlayDsc.data_size = (uint32_t)w * h * 3;
             s_overlayDsc.data = s_overlayBuf;
+            theme_art::adopt(s_overlayDsc);
         }
     }
     if (s_overlayBuf) return &s_overlayDsc;

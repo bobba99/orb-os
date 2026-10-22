@@ -27,6 +27,9 @@ namespace settingsview {
     // into WiFi setup with a first-run prompt instead of the normal menu/hint.
     void      openWifiSetupPrompt();
     void      openNoSdCardNotice(bool alsoNeedsWifi);   // UX-024; push dismisses
+    // A theme that did not load whole (main/theme_check.cpp on ESP-IDF): `what` is the first
+    // thing wrong, as a sentence. System chrome, like the card notice; push carries on.
+    void      openThemeProblem(const char *what);
 
     // Called once from main.cpp's setup() when a Launch Kit push left a custom
     // splash active — jumps straight to the About page (the same splash art,

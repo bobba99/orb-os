@@ -32,8 +32,9 @@ constexpr size_t CAPS[(int)App::Count] = {
     256 * 1024,   // Weather
     256 * 1024,   // News
      64 * 1024,   // Radio
+     32 * 1024,   // Themes: the index of a development theme server (main/dev_themes.cpp)
 };
-const char *const NAMES[(int)App::Count] = { "flight", "routes", "location", "weather", "news", "radio" };
+const char *const NAMES[(int)App::Count] = { "flight", "routes", "location", "weather", "news", "radio", "themes" };
 
 // Each block carries its size in front of it, so a free or a grow knows what it gives back.
 constexpr size_t HDR = 8;   // keeps the block 8-byte aligned, as malloc's is

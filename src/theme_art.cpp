@@ -200,6 +200,21 @@ const uint8_t *find_active(const char *assetName, Format wantFmt, int &w, int &h
     return p;
 }
 
+// This store bakes only RGB565 and RGB565+A8, so "any" adds nothing here; the ESP-IDF store
+// (components/orb_ui/themeart) is the one that writes indexed blobs.
+const uint8_t *find_active_any(const char *assetName, Format wantFmt, int &w, int &h, Format &fmt) {
+    fmt = wantFmt;
+    return find_active(assetName, wantFmt, w, h);
+}
+
+bool format_of(const void *p, Format &fmt) {
+    if (!owns(p)) return false;
+    const uint32_t off = (uint32_t)((const uint8_t *)p - (const uint8_t *)s_mapped);
+    for (uint32_t i = 0; i < s_hdr.count; ++i)
+        if (s_index[i].offset == off) { fmt = (Format)s_index[i].fmt; return true; }
+    return false;
+}
+
 bool slug_baked(const char *slug) {
     if (!s_mapped || !s_hdr.count || !slug || !slug[0]) return false;
     const uint32_t want = slug_hash(slug);
@@ -370,6 +385,8 @@ bool lookup(const char *, const char *, const uint8_t *&, int &, int &, Format &
 bool has(const char *, const char *) { return false; }
 bool find_blob(const char *, const char *, const uint8_t *&, size_t &) { return false; }
 const uint8_t *find_active(const char *, Format, int &, int &) { return nullptr; }
+const uint8_t *find_active_any(const char *, Format, int &, int &, Format &) { return nullptr; }
+bool format_of(const void *, Format &) { return false; }
 bool owns(const void *) { return false; }
 bool slug_baked(const char *) { return false; }
 bool install_begin(const char *, uint32_t, bool) { return false; }

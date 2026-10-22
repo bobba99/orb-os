@@ -17,6 +17,7 @@
 #include "route.h"           // route_request()/route_get() — {from}/{to} tokens in a custom text banner
 #include "custom_radar.h"    // CUSTOM_HAS_RADAR / CUSTOM_RTEXT{1,2,3}_* / CUSTOM_HAS_RADAR_STYLE / CUSTOM_SWEEP_*, CUSTOM_BLIP_*, CUSTOM_SEL_*, CUSTOM_OFFRANGE_*, CUSTOM_CENTER_* — a Launch Kit push's selection banners + visual styling
 #include "radar_sprite.h"    // radar_custom_plate()/radar_custom_overlay()/radar_custom_blip_icon() — the editor's baked background+rings+crosshair / CRT+glass / aircraft-icon layers
+#include "theme_art.h"       // format_of()/Pixels — an indexed plate, for the keep-out zones
 #include "custom_radar_blip.h"   // CUSTOM_HAS_RADAR_BLIP_IMAGE / CUSTOM_RADAR_BLIP_PIVOT_X/Y
 #include "custom_radar_sweep.h"  // CUSTOM_SWEEP_IMAGE_PIVOT_X/Y / CUSTOM_SWEEP_IMAGE_CENTER_X/Y — compile-time, coupled to whichever sweep sprite is baked in
 #include "theme_style.h"
@@ -2353,14 +2354,22 @@ static void rebuild_flat_background() {
     // not, which is the right default for decoration.
     //
     // Runs when the theme changes, not per frame.
-    if (rs.zoneCount > 0 && plate && plate->header.cf == LV_IMG_CF_TRUE_COLOR &&
+    // An indexed plate (the ESP-IDF store bakes a plate of 256 colours or fewer that way) is
+    // read through its palette; the result is the same pixel.
+    theme_art::Format plateFmt = theme_art::FMT_RGB565;
+    const bool plateIndexed = plate && theme_art::format_of(plate->data, plateFmt) &&
+                              theme_art::indexed_bpp(plateFmt);
+    if (rs.zoneCount > 0 && plate && (plate->header.cf == LV_IMG_CF_TRUE_COLOR || plateIndexed) &&
         plate->header.w == SCREEN_W && plate->header.h == SCREEN_H && s_flatBuf) {
         const lv_color_t *src = (const lv_color_t *)plate->data;
+        static theme_art::Pixels px;   // a palette's worth; static so the stack never carries it
+        if (plateIndexed) px.set((const uint8_t *)plate->data, SCREEN_W, SCREEN_H, plateFmt);
         int restored = 0;
         for (int y = 0; y < SCREEN_H; ++y) {
             for (int x = 0; x < SCREEN_W; ++x) {
                 if (!in_excluded_zone((lv_coord_t)x, (lv_coord_t)y)) continue;
-                s_flatBuf[y * SCREEN_W + x] = src[y * SCREEN_W + x];
+                if (plateIndexed) s_flatBuf[y * SCREEN_W + x].full = px.pal565[px.index_at(x, y)];
+                else              s_flatBuf[y * SCREEN_W + x] = src[y * SCREEN_W + x];
                 ++restored;
             }
         }

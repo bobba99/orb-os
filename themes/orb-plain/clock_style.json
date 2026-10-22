@@ -1,0 +1,43 @@
+{
+  "bg": 724498,
+  "secondSweep": true,
+  "hands": {
+    "hour": {
+      "show": true,
+      "pivotX": 6,
+      "pivotY": 132,
+      "centerX": 233,
+      "centerY": 233
+    },
+    "minute": {
+      "show": true,
+      "pivotX": 4,
+      "pivotY": 198,
+      "centerX": 233,
+      "centerY": 233
+    },
+    "second": {
+      "show": true,
+      "pivotX": 2,
+      "pivotY": 208,
+      "centerX": 233,
+      "centerY": 233
+    },
+    "order": [
+      0,
+      1,
+      2
+    ]
+  },
+  "text1": {
+    "show": true,
+    "x": 233,
+    "y": 300,
+    "align": 1,
+    "color": 10528946,
+    "fmt": "%a %d"
+  },
+  "text2": {
+    "show": false
+  }
+}

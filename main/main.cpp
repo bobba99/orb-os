@@ -34,6 +34,8 @@
 #include "orb_net.h"
 #include "flight.h"
 #include "host.h"
+#include "theme_check.h"
+#include "dev_themes.h"
 
 #include "app_shell.h"
 #include "app_theme.h"
@@ -42,6 +44,7 @@
 #include "theme_style.h"
 #include "theme_art.h"
 #include "theme_font.h"
+#include "update_ui.h"
 #include "theme_audio.h"
 #include "clock_view.h"
 #include "clock_wind.h"
@@ -77,6 +80,20 @@ static void rtc_seed_clock() {
     struct timeval tv = { t, 0 };
     settimeofday(&tv, nullptr);
     printf("[rtc] system clock seeded from RTC\n");
+}
+
+// Drop baked art belonging to themes no longer on the card (theme_art::reclaim_missing). Only
+// when the card's list can be trusted: no card, an unreadable /themes, or a list at its cap of
+// MAX_THEMES all say nothing about which themes are gone. The active theme always counts.
+static void reclaim_theme_art() {
+    if (!sdcard::mounted()) return;
+    static char slugs[theme_select::MAX_THEMES][theme_select::MAX_SLUG_LEN];
+    const int n = theme_select::listInstalled(slugs);
+    if (n <= 0 || n >= theme_select::MAX_THEMES) return;
+    const char *keep[theme_select::MAX_THEMES + 1];
+    for (int i = 0; i < n; ++i) keep[i] = slugs[i];
+    keep[n] = theme_select::activeSlug();
+    theme_art::reclaim_missing(keep, n + 1);
 }
 
 // src/storage.cpp applyThemeSettings(), the clock half: the mainspring and the theme's sounds
@@ -172,6 +189,7 @@ extern "C" void app_main(void) {
     theme_select::init();
     apply_theme_clock();
     theme_art::begin();
+    reclaim_theme_art();
     printf("[theme] wearing '%s'\n", theme_select::activeSlug()[0] ? theme_select::activeSlug() : "(stock)");
     psram_mark("after theme");
 
@@ -181,7 +199,20 @@ extern "C" void app_main(void) {
     display_idf::lock();
     // On Arduino display::begin() builds the radar UI itself; here it is a separate step.
     ui_create();
+    // src/main.cpp: the bake, behind update_ui's plain panel, only on the first boot after a
+    // theme changed (or a re-bake was asked for); then the splash; then the fonts, which load
+    // from what was just baked.
+    theme_art::set_progress([](const char *name, int done, int total) {
+        if (done == 0 && !name) update_ui::bake_begin(total);
+        else update_ui::bake_progress(name, done, total);
+    });
+    {
+        const bool forced = orb_prefs::getBool("rebake", false);
+        if (forced) orb_prefs::putBool("rebake", false);   // before the bake: a crash cannot loop it
+        theme_art::bake_active_theme(forced);
+    }
     ui_splash_show();
+    update_ui::bake_done();
     theme_font::begin();
     flight::applySettings();   // the scope's settings, now that the radar exists
     lv_obj_t *radarScreen = lv_scr_act();
@@ -219,26 +250,30 @@ extern "C" void app_main(void) {
     // building the apps and blocks on it; here the clock is up first and the network follows.
     orb_wifi::begin();
     orb_net::begin();   // the one HTTPS client task; every request goes through it
+    dev_themes::start();   // development builds only (CONFIG_ORB_DEV_THEME_URL)
     flight::begin();
 
     // src/main.cpp: a card notice, or WiFi setup, instead of the clock. Setup is owed when the
     // Orb knows no network at all, or after an Arduino Settings > Reset. "The Orb Setup" opens
     // as well in that case (orb_wifi), so the phone and the knob are both on offer.
     const bool wantWifiSetup = orb_wifi::savedCount() == 0 || orb_prefs::getBool("needsWifiSetup", false);
-    if (!sdcard::mounted() || wantWifiSetup) {
+    // Then a theme that did not load whole, which matters less than either of those.
+    const char *themeProblem = sdcard::mounted() ? theme_check::run() : nullptr;
+    if (!sdcard::mounted() || wantWifiSetup || themeProblem) {
         display_idf::lock();
         app_shell::selectApp(app_shell::APP_SETTINGS);
         app_shell::setCaptured(true);   // Settings captures the knob on entry; match that
-        if (!sdcard::mounted()) settingsview::openNoSdCardNotice(wantWifiSetup);
-        else                    settingsview::openWifiSetupPrompt();
+        if (!sdcard::mounted())  settingsview::openNoSdCardNotice(wantWifiSetup);
+        else if (wantWifiSetup)  settingsview::openWifiSetupPrompt();
+        else                     settingsview::openThemeProblem(themeProblem);
         display_idf::unlock();
     }
 
     // Core 1 with LVGL, as Arduino's loop() ran; core 0 stays free for the network.
     xTaskCreatePinnedToCore(app_loop, "app", 8192, nullptr, 5, nullptr, 1);
 
-    printf("setup done (firmware %s, ESP-IDF stage 4)\n", FW_VERSION);
+    printf("setup done (firmware %s, ESP-IDF stage 5)\n", FW_VERSION);
     printf("not ported yet: Headlines, weather, photos,\n"
            "  audio (ES8311), IMU and battery, idle dimming, mDNS and the web server,\n"
-           "  factory reset, baking a new theme\n");
+           "  factory reset\n");
 }
