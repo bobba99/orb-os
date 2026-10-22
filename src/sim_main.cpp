@@ -30,6 +30,8 @@
 #include "clock_view.h"
 #include "theme_audio.h"
 #include "intel_view.h"
+#include "yr_view.h"      // the MET Norway Weather app (ESP-IDF stage 8), for --yrshot
+#include "yr.h"
 #include "ticker_view.h"
 #include "ticker.h"
 #include "app_shell.h"
@@ -799,6 +801,9 @@ int main(int argc, char **argv) {
     // particular has to be checkable without that: it is the first thing a stranger ever
     // sees, five lines in a circle, and the whole of CUT-03 was a screen nobody had reached.
     const char *wifiShot   = (argc >= 3 && strcmp(argv[1], "--wifishot")   == 0) ? argv[2] : NULL;
+    // The Weather app (yr_view.cpp), with a fixed forecast: "now", the first hour and the
+    // first day of its wheel. On the device the forecast comes from MET (main/yr.cpp).
+    const char *yrShot     = (argc >= 3 && strcmp(argv[1], "--yrshot")     == 0) ? argv[2] : NULL;
     // The bake screen, for the same reason as the two above: on hardware it exists only for
     // the fifteen seconds after picking a theme, and it is three labels at fixed offsets,
     // which is exactly the layout that quietly overlaps when one of them gains a line.
@@ -822,7 +827,7 @@ int main(int argc, char **argv) {
     // --newsshot is headless but drives the KNOB, so it needs the full app lineup that only
     // interactive mode registers. It is the one capture that walks the shell rather than
     // putting a single screen up directly.
-    const bool  interactive = !shotPath && !gifPath && !updateShot && !readyShot && !bakeShot && !wifiShot && !knobShot && !windShot && !rockShot;
+    const bool  interactive = !shotPath && !gifPath && !updateShot && !readyShot && !bakeShot && !wifiShot && !knobShot && !windShot && !rockShot && !yrShot;
     (void)wxShot;   // live knob/app-shell only outside headless capture
     (void)setShot;
 
@@ -1973,6 +1978,49 @@ int main(int argc, char **argv) {
         static bool updateSaved = false;
         // Later than the other captures: the boot splash holds for about two seconds and
         // then fades, and at 1800 ms this photographed the splash instead of the screen.
+        static bool yrSaved = false;
+        if (yrShot && !yrSaved && now - start > 3000) {
+            yrSaved = true;
+            YrForecast f = {};
+            f.valid = true;
+            f.fetchedMs = lv_tick_get();
+            f.now = { 8.9f, 5.8f, 185, 0.4f, "lightrain" };
+            static const char *HS[] = { "cloudy", "lightrain", "rain", "rain", "partlycloudy_night", "clearsky_night",
+                                        "clearsky_night", "fair_night", "partlycloudy_day", "fair_day", "clearsky_day", "cloudy" };
+            for (int i = 0; i < YR_HOURS; ++i) {
+                f.hours[i].hour = (21 + i) % 24;
+                f.hours[i].tempC = 9.0f - i * 0.6f;
+                f.hours[i].precipMm = i < 4 ? 0.3f * (i + 1) : 0.0f;
+                snprintf(f.hours[i].symbol, sizeof(f.hours[i].symbol), "%s", HS[i]);
+            }
+            f.nHours = YR_HOURS;
+            static const char *DS[] = { "lightrain", "partlycloudy_day", "heavyrain", "sleet", "snow", "fog", "rainandthunder" };
+            for (int i = 0; i < YR_DAYS; ++i) {
+                f.days[i] = { (4 + i) % 7, i == 0, 3.0f - i, 9.0f - i * 0.5f, i == 2 ? 14.2f : 1.5f * i, "" };
+                snprintf(f.days[i].symbol, sizeof(f.days[i].symbol), "%s", DS[i]);
+            }
+            f.nDays = YR_DAYS;
+            yr_store(f);
+            lv_obj_t *wx = yrview::build();
+            lv_scr_load(wx);
+            // The splash lives on the top layer and covers any screen: hide it, as
+            // --themeshot does (hide, never clean; see the note there).
+            for (uint32_t i = 0; i < lv_obj_get_child_cnt(lv_layer_top()); ++i)
+                lv_obj_add_flag(lv_obj_get_child(lv_layer_top(), i), LV_OBJ_FLAG_HIDDEN);
+            char path[300];
+            auto shot = [&](const char *what) {
+                for (int i = 0; i < 4; ++i) { SDL_Delay(40); lv_tick_inc(40); lv_timer_handler(); }
+                lv_refr_now(NULL);
+                snprintf(path, sizeof(path), "%s-%s", yrShot, what);
+                sim_save_frame(path);
+            };
+            shot("0-now");
+            yrview::onTurn(1);
+            shot("1-hours");
+            for (int i = 0; i < YR_HOURS; ++i) yrview::onTurn(1);
+            shot("2-days");
+            run = false;
+        }
         if (wifiShot && !updateSaved && now - start > 6000) {
             updateSaved = true;
             char path[300];

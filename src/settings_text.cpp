@@ -1,4 +1,5 @@
 #include "settings_text.h"
+#include "orb_utf8.h"   // glyphs by character, not by byte
 #include "config.h"             // SCREEN_W / SCREEN_H
 #include "custom_settings.h"    // CUSTOM_HAS_SETTINGS / theme_font::settings_item()
 #include "theme_style.h"
@@ -169,14 +170,14 @@ void draw_item(const char *strIn, float x, float y, lv_color_t color, lv_opa_t o
     // wraps: a wheel row is one line by definition, and a second line would land on the
     // neighbour. Zion found "Chime sound   Westminster" in Steam Punk's face running off
     // the glass (2026-09-14), and Studio had no way to show him.
-    char buf[44];
-    const char *str = strIn;
-    const int n0 = (int)strlen(strIn), cap0 = n0 < 40 ? n0 : 40;
+    // In characters, not bytes (orb_utf8.h): "ø" is two bytes and one glyph.
+    uint32_t cp[44];
+    const int cap0 = orb_utf8_decode(strIn, cp, 40);
     float w[44], total = 0.0f;
     int cap = cap0;
     for (int i = 0; i < cap0; ++i) {
         lv_font_glyph_dsc_t g;
-        w[i] = lv_font_get_glyph_dsc(font, &g, (uint32_t)(uint8_t)strIn[i], 0) ? (float)g.adv_w : 0.0f;
+        w[i] = lv_font_get_glyph_dsc(font, &g, cp[i], 0) ? (float)g.adv_w : 0.0f;
         total += w[i];
     }
     if (maxW > 0.0f && total > maxW) {
@@ -186,12 +187,9 @@ void draw_item(const char *strIn, float x, float y, lv_color_t color, lv_opa_t o
         float kept = total;
         while (keep > 1 && kept + 3.0f * dot > maxW) { --keep; kept -= w[keep]; }
         // Do not end on a space: "Chime sound ..." reads worse than "Chime sound..."
-        while (keep > 1 && strIn[keep - 1] == ' ') { --keep; kept -= w[keep]; }
-        memcpy(buf, strIn, (size_t)keep);
-        buf[keep] = '.'; buf[keep + 1] = '.'; buf[keep + 2] = '.'; buf[keep + 3] = '\0';
-        str = buf;
+        while (keep > 1 && cp[keep - 1] == ' ') { --keep; kept -= w[keep]; }
         cap = keep + 3;
-        for (int i = keep; i < cap; ++i) w[i] = dot;
+        for (int i = keep; i < cap; ++i) { cp[i] = '.'; w[i] = dot; }
         total = kept + 3.0f * dot;
     }
     const float startX = x - total / 2.0f;
@@ -201,8 +199,8 @@ void draw_item(const char *strIn, float x, float y, lv_color_t color, lv_opa_t o
     float cx = startX;
     for (int i = 0; i < cap; ++i) {
         lv_font_glyph_dsc_t g;
-        if (lv_font_get_glyph_dsc(font, &g, (uint32_t)(uint8_t)str[i], 0)) {
-            const uint8_t *bmp = lv_font_get_glyph_bitmap(font, (uint32_t)(uint8_t)str[i]);
+        if (lv_font_get_glyph_dsc(font, &g, cp[i], 0)) {
+            const uint8_t *bmp = lv_font_get_glyph_bitmap(font, cp[i]);
             if (bmp && g.box_w && g.box_h) {
                 const float destCx = cx + (float)g.ofs_x + (float)g.box_w * 0.5f;
                 const float destCy = y + halfMid - (float)g.ofs_y - (float)g.box_h * 0.5f;
@@ -214,7 +212,7 @@ void draw_item(const char *strIn, float x, float y, lv_color_t color, lv_opa_t o
     }
     lv_obj_invalidate(s_canvas);
 #else
-    (void)str; (void)x; (void)y; (void)color; (void)opa;
+    (void)strIn; (void)x; (void)y; (void)color; (void)opa;
 #endif
 }
 

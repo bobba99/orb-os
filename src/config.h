@@ -209,7 +209,13 @@ static const float RANGE_STEPS_KM[] = {10.0f, 20.0f, 30.0f, 50.0f, 100.0f};
 #define ORB_MDNS_HOST       "theorb"
 #define ORB_MDNS_ADDR       ORB_MDNS_HOST ".local"
 
+#if ORB_IDF
+// Who is asking, and where to find out more: MET Norway's terms require both (stage 8), and
+// every service the ESP-IDF firmware calls is told the same. This fork, not its parent.
+#define ORB_USER_AGENT      "TheOrbOS/" FW_VERSION " github.com/bobba99/orb-os"
+#else
 #define ORB_USER_AGENT      "TheOrbOS/" FW_VERSION " (ESP32-S3 hobby; +https://zionbrock.com/orb)"
+#endif
 // Named after one feed and used by nine clients: aircraft, weather, weather radar, cloud
 // imagery, route lookup, photos and the news gateway. Kept as an alias rather than renamed
 // at all nine call sites, which would be a large diff to say one small thing.

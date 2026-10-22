@@ -91,6 +91,7 @@ static void time_for_face(struct tm *ti) {
 #include "custom_clock.h"   // CUSTOM_CLOCK — text banners + fallback bg for the pushed design
 #include "custom_hands.h"   // CUSTOM_HAS_* / CUSTOM_*_PIVOT_* / CUSTOM_*_BLEND / CUSTOM_HAND_ORDER
 #include "custom_text.h"    // CUSTOM_HAS_TEXT* (compile-time show/hide gate) / CUSTOM_TEXT*_FONT (compiled glyphs, not per-theme — see theme_style.h)
+#include "orb_utf8.h"        // glyphs by character, not by byte
 #include "custom_sprite.h"  // custom_plate()/custom_overlay()/custom_hand()
 #include "theme_style.h"
 #include "theme_font.h"   // per-theme fonts, with the compiled font as fallback    // per-theme bg/text position/color/format — the runtime half of custom_text.h's macros (theme_style.h explains what stays compile-time and why)
@@ -685,11 +686,12 @@ static void draw_baked_text(const lv_font_t *font, const char *fmt, int bx, int 
     // AFTER strftime, not before: %A is Wednesday by now, and uppercasing the format would
     // have missed it. THEME_CAPS 53.
     if (upper) orb_upper(buf);
-    const int n = (int)strlen(buf);
+    uint32_t cp[48];
+    const int n = orb_utf8_decode(buf, cp, 48);   // characters, not bytes: "ø" is two
     float w[48], total = 0.0f;
     for (int i = 0; i < n && i < 48; ++i) {
         lv_font_glyph_dsc_t g;
-        w[i] = lv_font_get_glyph_dsc(font, &g, (uint32_t)(uint8_t)buf[i], 0) ? (float)g.adv_w : 0.0f;
+        w[i] = lv_font_get_glyph_dsc(font, &g, cp[i], 0) ? (float)g.adv_w : 0.0f;
         total += w[i];
     }
     const float startX = (align == 1) ? (bx - total / 2.0f) : (align == 2) ? (bx - total) : (float)bx;
@@ -719,7 +721,8 @@ static void draw_baked_text(const lv_font_t *font, const char *fmt, int bx, int 
         ld.color = col; ld.opa = opa;
         float x = startX;
         for (int i = 0; i < n && i < 48; ++i) {
-            char c[2] = { buf[i], 0 };
+            char c[5];
+            orb_utf8_encode(cp[i], c);
             lv_canvas_draw_text(s_canvas, (lv_coord_t)lroundf(x) + ox, y0 + oy, (lv_coord_t)lroundf(w[i] + 4), &ld, c);
             x += w[i];
         }
@@ -798,12 +801,11 @@ static void draw_baked_arc_text(const lv_font_t *font, const char *fmt, float R,
         return;
     }
     if (upper) orb_upper(buf);   // THEME_CAPS 53, after strftime for the same reason
-    const int n = (int)strlen(buf);
+    uint32_t cp[48];
+    const int n = orb_utf8_decode(buf, cp, 48);   // characters, not bytes: "ø" is two
     float w[48]; float total = 0.0f;
     for (int i = 0; i < n && i < 48; ++i) {
-        char c[2] = { buf[i], 0 }; lv_point_t s;
-        lv_txt_get_size(&s, c, font, 0, 0, LV_COORD_MAX, 0);
-        w[i] = s.x; total += s.x;
+        w[i] = (float)lv_font_get_glyph_width(font, cp[i], 0); total += w[i];
     }
     const float norm = fmodf(fmodf(arcDeg, 360.0f) + 360.0f, 360.0f);
     const bool bottom = (norm > 90.0f && norm < 270.0f);
@@ -820,8 +822,8 @@ static void draw_baked_arc_text(const lv_font_t *font, const char *fmt, float R,
         const float rot = ang + (bottom ? 3.14159265358979f : 0.0f);    // glyph tilt (clockwise)
         cursor += w[i];
         lv_font_glyph_dsc_t g;
-        if (!lv_font_get_glyph_dsc(font, &g, (uint32_t)(uint8_t)buf[i], 0)) continue;
-        const uint8_t *bmp = lv_font_get_glyph_bitmap(font, (uint32_t)(uint8_t)buf[i]);
+        if (!lv_font_get_glyph_dsc(font, &g, cp[i], 0)) continue;
+        const uint8_t *bmp = lv_font_get_glyph_bitmap(font, cp[i]);
         if (!bmp || g.box_w == 0 || g.box_h == 0) continue;
         // Glyph box centre offset from the arc anchor in the upright (unrotated)
         // text frame, then rotated by the tilt into screen space.

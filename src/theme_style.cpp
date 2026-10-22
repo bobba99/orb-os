@@ -134,10 +134,13 @@ void seed_defaults() {
     // App roster. Settings is not here on purpose: it is a system screen, always present.
     s_apps = Apps{};
     s_names = Names{};      // stock labels; theme.json may relabel any of them
+#if ORB_IDF
+    snprintf(s_names.weather, sizeof(s_names.weather), "Weather");   // a forecast, not the old radar
+#endif
     s_assetsHash = 0;
     s_apps.clock        = (bool)CUSTOM_APP_CLOCK;
     s_apps.flight       = (bool)CUSTOM_APP_FLIGHT;
-    s_apps.weather      = (bool)CUSTOM_APP_WEATHER;
+    s_apps.weather      = ORB_IDF ? true : (bool)CUSTOM_APP_WEATHER;   // ESP-IDF ships its own Weather
     s_apps.surveillance = (bool)CUSTOM_APP_SURVEILLANCE;
     s_apps.headlines    = (bool)CUSTOM_APP_HEADLINES;
 
@@ -635,6 +638,10 @@ void load() {
         JsonDocument doc;
         if (read_style_json(slug, "weather_style.json", doc)) {
             if (doc["bg"].is<uint32_t>()) s_weather.bg = doc["bg"].as<uint32_t>();
+            if (doc["yrText"].is<uint32_t>())   s_weather.yrText   = doc["yrText"].as<uint32_t>();
+            if (doc["yrDim"].is<uint32_t>())    s_weather.yrDim    = doc["yrDim"].as<uint32_t>();
+            if (doc["yrAccent"].is<uint32_t>()) s_weather.yrAccent = doc["yrAccent"].as<uint32_t>();
+            if (doc["yrIcon"].is<uint32_t>())   s_weather.yrIcon   = doc["yrIcon"].as<uint32_t>();
             if (doc["sweepEnabled"].is<bool>()) s_weather.sweepEnabled = doc["sweepEnabled"].as<bool>();
             if (doc["sweepTypeImage"].is<bool>()) s_weather.sweepTypeImage = doc["sweepTypeImage"].as<bool>();
             if (doc["sweepColor"].is<uint32_t>()) s_weather.sweepColor = doc["sweepColor"].as<uint32_t>();
@@ -1103,7 +1110,11 @@ void load() {
             if (!a.isNull()) {
                 if (a["clock"].is<bool>())        s_apps.clock        = a["clock"].as<bool>();
                 if (a["flight"].is<bool>())       s_apps.flight       = a["flight"].as<bool>();
-                if (a["weather"].is<bool>())      s_apps.weather      = a["weather"].as<bool>();
+                // On ESP-IDF, Weather is MET Norway's forecast (yr_view.cpp). An Orb Studio
+                // export (no "schema") said "weather" about the old radar app, so only a
+                // schema-1 theme turns this one off.
+                if (a["weather"].is<bool>() && (!ORB_IDF || !doc["schema"].isNull()))
+                    s_apps.weather = a["weather"].as<bool>();
                 if (a["surveillance"].is<bool>()) s_apps.surveillance = a["surveillance"].as<bool>();
                 if (a["headlines"].is<bool>())    s_apps.headlines    = a["headlines"].as<bool>();
                 if (a["ticker"].is<bool>())       s_apps.ticker       = a["ticker"].as<bool>();
@@ -1119,7 +1130,9 @@ void load() {
                 struct { const char *key; char *dst; size_t cap; } map[] = {
                     { "clock",        s_names.clock,        sizeof(s_names.clock)        },
                     { "flight",       s_names.flight,       sizeof(s_names.flight)       },
-                    { "weather",      s_names.weather,      sizeof(s_names.weather)      },
+                    // An Orb Studio export's name for the old radar app; see "apps" above.
+                    { "weather",      (ORB_IDF && doc["schema"].isNull()) ? nullptr : s_names.weather,
+                                      sizeof(s_names.weather)      },
                     { "surveillance", s_names.surveillance, sizeof(s_names.surveillance) },
                     { "headlines",    s_names.headlines,    sizeof(s_names.headlines)    },
                     { "ticker",       s_names.ticker,       sizeof(s_names.ticker)       },
@@ -1127,7 +1140,7 @@ void load() {
                 };
                 for (auto &m : map) {
                     JsonVariantConst v = nm[m.key];
-                    if (v.is<const char *>() && v.as<const char *>()[0])
+                    if (m.dst && v.is<const char *>() && v.as<const char *>()[0])
                         snprintf(m.dst, m.cap, "%s", v.as<const char *>());
                 }
             }

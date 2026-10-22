@@ -9,20 +9,7 @@
 // Latin-1) shows them with no change here, and one a theme brings is held to what it carries.
 #include <lvgl.h>
 #include <stdint.h>
-
-// One code point out of UTF-8, advancing p; 0xFFFD for a broken sequence.
-inline uint32_t orb_utf8_next(const unsigned char *&p) {
-    const unsigned char c = *p++;
-    if (c < 0x80) return c;
-    int more = c >= 0xF0 ? 3 : c >= 0xE0 ? 2 : c >= 0xC0 ? 1 : 0;
-    uint32_t cp = more == 3 ? (c & 0x07) : more == 2 ? (c & 0x0F) : (c & 0x1F);
-    if (!more) return 0xFFFD;
-    for (; more; --more) {
-        if ((*p & 0xC0) != 0x80) return 0xFFFD;
-        cp = (cp << 6) | (*p++ & 0x3F);
-    }
-    return cp;
-}
+#include "orb_utf8.h"   // orb_utf8_next()
 
 // The plain letter under a Latin-1 accented one, or 0.
 inline char orb_fold_latin1(uint32_t cp) {

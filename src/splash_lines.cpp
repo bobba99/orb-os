@@ -117,6 +117,11 @@ void repaint() {
     theme_style::SplashText third = second;
     third.y += (int)lv_font_get_line_height(splash_font(sp.credits.size)) + 4;
     one_line(third, "News: NRK, VG \xC2\xB7 Places: Open-Meteo");
+    // MET Norway's data is CC BY 4.0, and its terms ask for the credit where it is used:
+    // the Weather screen says it under the forecast, and this says it with the others.
+    theme_style::SplashText fourth = third;
+    fourth.y += (int)lv_font_get_line_height(splash_font(sp.credits.size)) + 4;
+    one_line(fourth, "Weather: MET Norway (CC BY 4.0)");
 #endif
     if (s_canvas) lv_obj_invalidate(s_canvas);
 }

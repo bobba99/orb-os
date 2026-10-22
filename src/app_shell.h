@@ -96,6 +96,9 @@ namespace app_shell {
 #if !APPS_LAUNCH_ONE
         APP_TICKER,
 #endif
+#if ORB_IDF && APPS_LAUNCH_ONE
+        APP_WEATHER,   // MET Norway's forecast (yr_view.cpp), the ESP-IDF firmware's own
+#endif
         APP_SETTINGS,
         APP_COUNT,
     };
