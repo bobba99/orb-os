@@ -20,6 +20,7 @@ import json
 import os
 import re
 import shutil
+import struct
 import subprocess
 import sys
 
@@ -79,6 +80,39 @@ def loader_keys():
         keys.setdefault(name, set()).update(found)
     keys["theme.json"] = keys.get("theme.json", set()) | {"schema"}
     return keys
+
+
+# ---- fonts ------------------------------------------------------------------------------
+
+NORDIC = "æøåÆØÅ"
+
+
+def font_codepoints(data):
+    """The characters an lv_font_conv binary font carries, from its cmap table. None when the
+    file is not one."""
+    pos, cmap = 0, None
+    while pos + 8 <= len(data):
+        length, tag = struct.unpack_from("<I4s", data, pos)
+        if length < 8:
+            return None
+        if tag == b"cmap":
+            cmap = pos
+            break
+        pos += length
+    if cmap is None:
+        return None
+    count, = struct.unpack_from("<I", data, cmap + 8)
+    have = set()
+    for i in range(count):
+        off, start, rlen, _gid, entries, fmt = struct.unpack_from("<IIHHHB", data, cmap + 12 + i * 16)
+        body = cmap + off
+        if fmt == 2:                                   # format0_tiny: every code in the range
+            have.update(range(start, start + rlen))
+        elif fmt == 0:                                 # format0_full: an id per code, 0 = none
+            have.update(start + k for k in range(rlen) if data[body + k])
+        else:                                          # sparse (1) and sparse_tiny (3): deltas
+            have.update(start + struct.unpack_from("<H", data, body + 2 * k)[0] for k in range(entries))
+    return have
 
 
 # ---- validate -----------------------------------------------------------------------------
@@ -169,6 +203,14 @@ def validate(folder):
             rep.error("%s should hold an object, not %s" % (name, type(doc).__name__))
 
     for f in sorted(os.listdir(folder)):
+        if f.startswith("font_") and f.endswith(".bin"):
+            have = font_codepoints(open(os.path.join(folder, f), "rb").read())
+            if have is None:
+                rep.error("%s is not an lv_font_conv binary font" % f)
+            else:
+                missing = "".join(c for c in NORDIC if ord(c) not in have)
+                if missing and have & set(range(0x61, 0x7B)):   # only fonts that carry text
+                    rep.warn("%s has no %s: Norwegian text in it draws with gaps" % (f, missing))
         if not f.endswith(".png"):
             continue
         try:

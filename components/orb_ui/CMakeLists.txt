@@ -24,6 +24,9 @@ set(SHARED
     custom_menu_font1.c custom_menu_font2.c custom_menu_font3.c
     font_inter_12.c font_inter_14.c font_inter_16.c font_inter_18.c font_inter_20.c)
 list(TRANSFORM SHARED PREPEND "${ORB_SRC}/")
+# Montserrat with Norwegian letters (tools/gen_fonts.py), in place of LVGL's: see lv_conf.h.
+file(GLOB ORB_FONTS "${ORB_SRC}/fonts/*.c")
+list(APPEND SHARED ${ORB_FONTS})
 # The theme art store and its baker for ESP-IDF (stage 5). src/theme_art.cpp is the Arduino
 # firmware's store, with a different on-flash layout, and is not compiled here.
 list(APPEND SHARED "${CMAKE_CURRENT_LIST_DIR}/themeart/store.cpp" "${CMAKE_CURRENT_LIST_DIR}/themeart/bake.cpp")

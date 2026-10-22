@@ -83,8 +83,8 @@ void repaint() {
     // The theme's name and who made it, THEME_CAPS 35. UX-028 puts these beside the version
     // and the credits, and CUT-07 says so by number; the splash carried neither. Live like
     // the other three because they come from theme.json on the card, which Studio writes
-    // at export rather than baking into the picture. ASCII only, "by" rather than an
-    // interpunct: the compiled Inter covers 0x20-0x7F and anything outside it draws nothing.
+    // at export rather than baking into the picture. "by" rather than an interpunct, which
+    // the compiled Inter has drawn since stage 6 (tools/gen_fonts.py) but a theme's may not.
     char who[112];
     const char *author = theme_style::themeAuthor();
     if (author && *author) snprintf(who, sizeof(who), "%s by %s", theme_style::themeLabel(), author);

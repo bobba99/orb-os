@@ -102,7 +102,10 @@ error. Full-screen pictures are 466 x 466.
 
 Optional. A theme may carry its own faces as `lv_font_conv` binaries under the slot names
 `theme_tool.py keys` lists (`font_clock1.bin`, `font_menu_current.bin`, ...). A slot the theme does
-not fill uses the firmware's compiled face. This repository's `.gitignore` ignores `*.bin`, so a
+not fill uses the firmware's compiled face. The built-in faces carry Latin-1 (æøå, é, «») and
+typographic punctuation (– — ‘ ’ “ ” …); a theme's own font should too, and `validate` warns
+about one that carries text but not æøå. Text from the network is fitted to the font that draws
+it (`src/orb_text_fit.h`): a letter the font lacks becomes its plain letter, or is left out. This repository's `.gitignore` ignores `*.bin`, so a
 theme kept here with fonts needs them added with `git add -f`.
 
 ## Baking

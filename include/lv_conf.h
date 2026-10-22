@@ -110,25 +110,44 @@
 /*==================
    FONTS
  *==================*/
-#define LV_FONT_MONTSERRAT_12 1
-#define LV_FONT_MONTSERRAT_14 1
-#define LV_FONT_MONTSERRAT_16 1
-#define LV_FONT_MONTSERRAT_18 1   /* large-text mode: 14 -> 18 */
-#define LV_FONT_MONTSERRAT_20 1   /* large-text mode: 16 -> 20 */
-/* 22..44: the Headlines screen's size ladder (THEME_CAPS 12). A theme picks a face from
-   this set and nothing else — LVGL fonts are compiled glyph bitmaps, so a size that is not
-   linked in cannot be drawn at all, and the whole ladder has to exist in the binary for a
-   slider to be able to land on it. Roughly 20-60 KB of flash each at these sizes, which is
-   what buys headlines readable from across a room. */
-#define LV_FONT_MONTSERRAT_22 1
-#define LV_FONT_MONTSERRAT_24 1
-#define LV_FONT_MONTSERRAT_26 1
-#define LV_FONT_MONTSERRAT_28 1
-#define LV_FONT_MONTSERRAT_32 1
-#define LV_FONT_MONTSERRAT_36 1
-#define LV_FONT_MONTSERRAT_40 1
-#define LV_FONT_MONTSERRAT_44 1
-#define LV_FONT_MONTSERRAT_48 1   /* big clock face (app shell), and the top of the ladder */
+/* MONTSERRAT WITH NORWEGIAN LETTERS (stage 6 of REWRITE_PLAN.md). LVGL's own Montserrat
+   covers 0x20-0x7F only, so æ, ø, å, é, «», dashes, curly quotes and … drew as boxes. These
+   sizes come from tools/gen_fonts.py instead: LVGL's source and options with Latin-1 and the
+   punctuation added, in src/fonts/, under LVGL's names so no call site changes. LVGL's copies
+   are switched off below and ours declared; tools/gen_fonts.py builds every size listed here.
+
+   22..44 are the Headlines screen's size ladder (THEME_CAPS 12): a theme picks a face from this
+   set and nothing else, because a size that is not linked in cannot be drawn at all. */
+#define ORB_FONT_MONTSERRAT_12 1
+#define ORB_FONT_MONTSERRAT_14 1
+#define ORB_FONT_MONTSERRAT_16 1
+#define ORB_FONT_MONTSERRAT_18 1   /* large-text mode: 14 -> 18 */
+#define ORB_FONT_MONTSERRAT_20 1   /* large-text mode: 16 -> 20 */
+#define ORB_FONT_MONTSERRAT_22 1
+#define ORB_FONT_MONTSERRAT_24 1
+#define ORB_FONT_MONTSERRAT_26 1
+#define ORB_FONT_MONTSERRAT_28 1
+#define ORB_FONT_MONTSERRAT_32 1
+#define ORB_FONT_MONTSERRAT_36 1
+#define ORB_FONT_MONTSERRAT_40 1
+#define ORB_FONT_MONTSERRAT_44 1
+#define ORB_FONT_MONTSERRAT_48 1   /* big clock face (app shell), and the top of the ladder */
+
+#define LV_FONT_MONTSERRAT_12 0
+#define LV_FONT_MONTSERRAT_14 0
+#define LV_FONT_MONTSERRAT_16 0
+#define LV_FONT_MONTSERRAT_18 0
+#define LV_FONT_MONTSERRAT_20 0
+#define LV_FONT_MONTSERRAT_22 0
+#define LV_FONT_MONTSERRAT_24 0
+#define LV_FONT_MONTSERRAT_26 0
+#define LV_FONT_MONTSERRAT_28 0
+#define LV_FONT_MONTSERRAT_32 0
+#define LV_FONT_MONTSERRAT_36 0
+#define LV_FONT_MONTSERRAT_40 0
+#define LV_FONT_MONTSERRAT_44 0
+#define LV_FONT_MONTSERRAT_48 0
+#define LV_FONT_CUSTOM_DECLARE LV_FONT_DECLARE(lv_font_montserrat_12) LV_FONT_DECLARE(lv_font_montserrat_14) LV_FONT_DECLARE(lv_font_montserrat_16) LV_FONT_DECLARE(lv_font_montserrat_18) LV_FONT_DECLARE(lv_font_montserrat_20) LV_FONT_DECLARE(lv_font_montserrat_22) LV_FONT_DECLARE(lv_font_montserrat_24) LV_FONT_DECLARE(lv_font_montserrat_26) LV_FONT_DECLARE(lv_font_montserrat_28) LV_FONT_DECLARE(lv_font_montserrat_32) LV_FONT_DECLARE(lv_font_montserrat_36) LV_FONT_DECLARE(lv_font_montserrat_40) LV_FONT_DECLARE(lv_font_montserrat_44) LV_FONT_DECLARE(lv_font_montserrat_48)
 #define LV_FONT_DEFAULT &lv_font_montserrat_14
 
 /*==================

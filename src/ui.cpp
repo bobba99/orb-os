@@ -17,6 +17,7 @@ static inline void  heap_caps_free(void *p) { free(p); }
 #include "radar_view.h"
 #include "custom_radar.h"     // CUSTOM_HAS_RADAR_STYLE — a pushed design's own banners replace this card
 #include "route.h"
+#include "orb_text_fit.h"   // what the card's font can draw: æøå now, boxes never
 #include "photo.h"
 #include "weather.h"
 #include "wx_radar.h"
@@ -213,38 +214,6 @@ static const char *cardinal(float deg) {
     return p[i];
 }
 
-// Fold Latin-1 accents / drop any other non-ASCII so the Montserrat font never hits a
-// missing glyph (which renders as an empty box). Belt-and-suspenders for card text.
-static void fold_ascii(char *s) {
-    char *o = s;
-    for (unsigned char *p = (unsigned char *)s; *p; ) {
-        if (*p < 0x80) { *o++ = (char)*p++; continue; }
-        if (*p == 0xC3 && p[1]) {                       // Latin-1 Supplement (U+00C0..U+00FF)
-            const unsigned char d = p[1];
-            char r;
-            if      (d >= 0x80 && d <= 0x85) r = 'A';
-            else if (d >= 0xA0 && d <= 0xA5) r = 'a';
-            else if (d == 0x87)              r = 'C';
-            else if (d == 0xA7)              r = 'c';
-            else if (d >= 0x88 && d <= 0x8B) r = 'E';
-            else if (d >= 0xA8 && d <= 0xAB) r = 'e';
-            else if (d >= 0x8C && d <= 0x8F) r = 'I';
-            else if (d >= 0xAC && d <= 0xAF) r = 'i';
-            else if (d == 0x91)              r = 'N';
-            else if (d == 0xB1)              r = 'n';
-            else if (d >= 0x92 && d <= 0x96) r = 'O';
-            else if (d >= 0xB2 && d <= 0xB6) r = 'o';
-            else if (d >= 0x99 && d <= 0x9C) r = 'U';
-            else if (d >= 0xB9 && d <= 0xBC) r = 'u';
-            else                             r = '?';
-            *o++ = r; p += 2; continue;
-        }
-        ++p;                                            // skip other multibyte lead + continuation
-        while (*p >= 0x80 && *p < 0xC0) ++p;
-    }
-    *o = 0;
-}
-
 // ----------------------------------------------------------------- detail card
 static void refresh_card(void) {
 #if CUSTOM_HAS_RADAR_STYLE
@@ -269,7 +238,7 @@ static void refresh_card(void) {
     char title[40];
     if (in.type[0]) snprintf(title, sizeof(title), "%s  %s", in.call[0] ? in.call : "-", in.type);
     else            snprintf(title, sizeof(title), "%s", in.call[0] ? in.call : "-");
-    fold_ascii(title);
+    orb_text_fit(title, lv_obj_get_style_text_font(s_cardTitle, LV_PART_MAIN));   // the font decides, not a guess
     lv_label_set_text(s_cardTitle, title);
     lv_obj_set_style_text_color(s_cardTitle, in.emergency ? UI_EMERG : UI_INK, 0);
 
@@ -298,7 +267,7 @@ static void refresh_card(void) {
         char rt[96];
         if (rfrom[0] || rto[0]) snprintf(rt, sizeof(rt), "%s -> %s", rfrom[0] ? rfrom : "?", rto[0] ? rto : "?");
         else                    snprintf(rt, sizeof(rt), "Route unavailable");
-        fold_ascii(rt);
+        orb_text_fit(rt, lv_obj_get_style_text_font(s_cardRoute, LV_PART_MAIN));
         lv_label_set_text(s_cardRoute, rt);
     } else {
         lv_label_set_text(s_cardRoute, "Looking up route...");     // pending: lookup in flight
