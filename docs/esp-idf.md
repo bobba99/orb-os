@@ -44,10 +44,11 @@ place of their own.
 | Display (CO5300, LVGL 8, byte-swapped flush) | Arbitrary rotation, the TE wait, the staged flush |
 | Knob on PCNT, rock gesture, long-press reboot | |
 | SD card (SPI, 20/10/4 MHz negotiation, never formats) | |
-| Settings in NVS, same keys as Arduino, never erases | Most settings: only theme, app skin, wind, tz, brightness, place name are read |
+| Settings in NVS, same keys as Arduino, never erases | Some settings: what the clock, the scope and Settings use is read |
 | RTC seeds the clock at boot | NTP, writing NTP time back to the RTC |
-| Clock and Flight Tracker apps, theme, splash | Headlines, Settings, the web server |
-| WiFi on the stored network, reconnecting with backoff; NTP; the aircraft feed over verified HTTPS | The setup portal, joining or saving a new network (stage 3) |
+| Clock, Flight Tracker and Settings apps, theme, splash | Headlines (its slot is held by a hidden empty screen), the web server |
+| WiFi: several saved networks, fallback, backoff, "The Orb Setup", joining with the knob; NTP; the aircraft feed over verified HTTPS | Forgetting a network from the screen |
+| | Settings > Location changes nothing (search, recents, IP lookup: stage 4); Settings > Reset erases nothing (stage 10) |
 | | Audio (a stub reporting no codec), IMU, battery, idle dimming |
 | Baked theme art and fonts, read from the themeart partition | Baking: a theme installed or changed is not re-baked yet |
 
@@ -102,6 +103,32 @@ which brings Headlines back (7); yr.no weather (8); radio and the ES8311 (9); Se
 auth and OTA (10); CI (11). Smaller gaps from this stage, none of them in the plan's list,
 are in "What runs, and what does not yet" above. Two are worth measuring rather than
 leaving: the QSPI clock (40 MHz here, 80 on Arduino) and PNGdec's C path.
+
+## Stage 3: WiFi, in progress (2026-10-22)
+
+`components/orb_wifi` is an event-driven state machine on `esp_event`: IDLE, CONNECTING,
+CONNECTED, BACKOFF, PROVISIONING. One manager task on core 0 makes every decision; its header
+says how a round works and the two promises it keeps (the driver's stored network is read once
+and never written; a network is saved only once it has produced an address).
+
+- **Several saved networks** in NVS (`wifiNets`, up to 8), seeded from the Arduino firmware's
+  stored network, tried strongest first; backoff from 1 s doubling to 30 s; no reboots.
+- **"The Orb Setup"**, an open access point beside the station (APSTA), with captive DNS and
+  a page at 192.168.4.1, opens after `CONFIG_ORB_WIFI_SETUP_AFTER_S` (300 s) offline or when no
+  network is saved, and closes 60 s after the Orb is back online.
+- **Settings** is ported whole (`src/settings_view.cpp` compiled as it is, its host functions
+  in `main/host.cpp`). Its WiFi pages drive `orb_wifi::tryNetwork()`; a join needs no restart.
+  Pages whose work belongs to a later stage say so in the log and change nothing.
+
+Seen on the Orb: the list seeded, fallback, the backoff ladder, rejoining after the link went,
+the setup network opening and listing networks, a wrong password refused with the saved
+networks left as they were, and a join with the knob. **Not seen yet:** a join from the setup
+page, and the setup network closing after it.
+
+**A router that announces a channel switch and stays put** makes any ESP32 drop every few
+seconds: the Orb follows the announcement (`sta rx csa, newchan=8, old=6`), hears no beacons
+on the new channel, and leaves with reason 200. ESP-IDF has no setting to ignore the
+announcement. The cure is on the router: give its 2.4 GHz radio a fixed channel.
 
 ## The toolchain: `idf.py`, ESP-IDF v5.5.6
 

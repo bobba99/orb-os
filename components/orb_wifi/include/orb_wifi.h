@@ -7,7 +7,8 @@
 //              |   ^         |  (link lost: straight back to CONNECTING)
 //              v   |         v
 //            BACKOFF  (1 s doubling to 30 s, then a new round)
-//   PROVISIONING: no saved network at all; the setup access point (next step of the stage).
+//   PROVISIONING: no saved network has answered for ORB_WIFI_SETUP_AFTER_S (or there is none):
+//                 "The Orb Setup" is up beside the rounds, which carry on every 30 s.
 //
 // A round scans, then tries the saved networks that are visible, strongest first, then any
 // that were not seen (a hidden network does not answer a scan), each for up to 20 s.

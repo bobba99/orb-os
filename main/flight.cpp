@@ -7,7 +7,7 @@
 //                 photos are not ported)
 //   hand-off      src/main.cpp loop(), the snapshot swap and the catch-up render
 //   query radius  src/app_hooks.cpp queryRadiusKm() and deadZoneKm()
-// Read-only on settings: nothing here writes NVS. Changing them is Settings' job, not ported.
+// Settings writes one of these, the range, through setRangeKm(); the rest are read-only here.
 #include "flight.h"
 
 #include <map>
@@ -46,6 +46,7 @@ std::vector<Aircraft>            s_snap;       // core 1 draws from this
 volatile bool     s_dirty = false;
 volatile bool     s_visible = false;
 volatile uint32_t s_lastFeedOkMs = 0;
+volatile bool     s_requery = false;   // the range changed: begin() again at the new radius
 
 float query_radius_km() {
     float km = s_settings.rangeKm * ADSB_QUERY_MULT;
@@ -92,6 +93,11 @@ void net_task(void *) {
     bool wasOnScreen = false;
     int failCount = 0;
     for (;;) {
+        if (s_requery) {   // src/net/net_task.cpp, the g_requery step
+            s_requery = false;
+            s_adsb.begin(s_settings.homeLat, s_settings.homeLon, query_radius_km());
+            lastPoll = 0;   // poll at once at the new radius
+        }
         const bool conn = orb_wifi::connected();
         const bool radarActive = theme_style::apps().flight;
         if (conn && radarActive) {
@@ -198,6 +204,19 @@ void flight::begin() {
 }
 
 void flight::setVisible(bool on) { s_visible = on; }
+
+double flight::homeLat() { return s_settings.homeLat; }
+double flight::homeLon() { return s_settings.homeLon; }
+float  flight::rangeKm() { return s_settings.rangeKm; }
+
+void flight::setRangeKm(float km) {
+    s_settings.rangeKm = km;
+    orb_prefs::putFloat("rangeKm", km);
+    s_adsb.setMinDistKm(dead_zone_km());   // a zone in pixels is a new distance at a new range
+    s_requery = true;
+    radar::update(s_snap, s_settings);     // the zoom shows now, from the last snapshot
+    ui_on_data_updated();
+}
 
 void flight::loopTick() {
     // src/main.cpp loop(): swap under the lock, render outside it, and only while visible.

@@ -6,7 +6,7 @@
 # non-Arduino path is right for the simulator and wrong for the device, it gains an
 # ESP-IDF branch of its own; see docs/esp-idf.md.
 #
-# The list is the clock's and the flight tracker's: stage 2's exit criterion. Hardware
+# The list is the clock's, the flight tracker's (stage 2) and Settings' (stage 3). Hardware
 # drivers are not here (display, knob, sdcard, audio and diag_log have ESP-IDF versions in
 # their own components). adsb_client fetches through orb_http on ESP-IDF.
 set(ORB_SRC "${CMAKE_CURRENT_LIST_DIR}/../../src")
@@ -18,6 +18,7 @@ set(SHARED
     theme_style.cpp theme_select.cpp theme_sd.cpp theme_art.cpp theme_font.cpp theme_audio.cpp
     custom_sprite.cpp plate_sprite.cpp office_sprite.cpp menu_sprite.cpp menu_text.cpp
     splash_art.cpp splash_lines.cpp curved_text.cpp text_tokens.cpp
+    settings_view.cpp settings_sprite.cpp settings_text.cpp chime_library.cpp
     custom_font1.c custom_font2.c custom_settings_font1.c
     custom_radar_font1.c custom_radar_font2.c custom_radar_font3.c custom_radar_font4.c
     custom_menu_font1.c custom_menu_font2.c custom_menu_font3.c

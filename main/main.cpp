@@ -32,6 +32,7 @@
 #include "orb_prefs.h"
 #include "orb_wifi.h"
 #include "flight.h"
+#include "host.h"
 
 #include "app_shell.h"
 #include "app_theme.h"
@@ -45,6 +46,8 @@
 #include "clock_wind.h"
 #include "wind_notice.h"
 #include "radar_view.h"
+#include "settings_view.h"
+#include "chime_library.h"
 #include "ui.h"
 
 static const char *TAG = "orb";
@@ -54,33 +57,12 @@ void bringup_run();   // bringup.cpp
 // The owner's timezone: NVS "tz" as Arduino stored it, else the compiled default.
 static char s_tz[48] = TZ_STR;
 
-// The idle / face-down / update-in-progress combination lives in src/main.cpp's
-// applyBrightness() and is not ported; for now the owner's level is simply applied.
-static int s_brightness = BRIGHTNESS_DEFAULT;
-
 static void psram_mark(const char *stage) {
     printf("[psram] %-26s free %6u KB\n", stage,
            (unsigned)(heap_caps_get_free_size(MALLOC_CAP_SPIRAM) / 1024));
     printf("[intram] %-25s free %6u B  largest %5u B\n", stage,
            (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
            (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL));
-}
-
-// --- host functions the shared code calls (src/ declares them extern) ----------------
-
-// update_ui's hook: an update notice on screen puts the panel at full brightness, however
-// dim the owner keeps it. As src/main.cpp host_update_bright(), minus the idle state that
-// is not ported.
-void host_update_bright(bool on) {
-    display::noteActivity();
-    display::setBrightness(on ? 255 : (uint8_t)s_brightness);
-}
-
-// The place's name for the flight tracker's location line: the same NVS key
-// src/location.cpp saves it under. False when nothing has ever named it.
-bool host_location_name(char *out, size_t n) {
-    if (!n) return false;
-    return orb_prefs::getString("homeName", out, n) && out[0];
 }
 
 // src/main.cpp utc_to_time() + rtc_seed_clock(): the RTC holds UTC, mktime() assumes local
@@ -175,7 +157,7 @@ extern "C" void app_main(void) {
     // Settings first: everything below reads them. Never erases (orb_prefs.h).
     orb_prefs::begin();
     orb_prefs::getString("tz", s_tz, sizeof(s_tz), TZ_STR);
-    s_brightness = (int)orb_prefs::getInt("bright", BRIGHTNESS_DEFAULT);
+    host::loadSettings();   // brightness, sound and units; the host_* functions are in host.cpp
     setenv("TZ", s_tz, 1); tzset();
 
     sdcard::begin();
@@ -191,7 +173,7 @@ extern "C" void app_main(void) {
     psram_mark("after theme");
 
     if (!display::begin()) ESP_LOGE(TAG, "display did not come up");
-    display::setBrightness((uint8_t)s_brightness);
+    display::setBrightness((uint8_t)host::brightness());
 
     display_idf::lock();
     // On Arduino display::begin() builds the radar UI itself; here it is a separate step.
@@ -204,12 +186,21 @@ extern "C" void app_main(void) {
 
     clockview::init();
     psram_mark("after clockview");
-    // Slot order is app_shell::Slot's: Clock, then Flight Tracker. Headlines and Settings
-    // come after them and are not ported yet, so nothing registers in their places.
+    // Slot order is app_shell::Slot's: Clock, Flight Tracker, Headlines, Settings.
     app_shell::add(clockview::screen(), theme_style::names().clock, nullptr, nullptr, false,
                    clockview::onEnter, clockview::onExit, !theme_style::apps().clock);
     app_shell::add(radarScreen, theme_style::names().flight, flight_press, flight_turn, false,
                    flight_enter, flight_exit, !theme_style::apps().flight);
+    // Headlines is not ported (stage 7). Its slot is held by an empty screen the knob never
+    // reaches, so APP_SETTINGS means Settings, as verifySlots() below checks.
+    app_shell::add(lv_obj_create(nullptr), theme_style::names().headlines, nullptr, nullptr,
+                   false, nullptr, nullptr, true);
+    // Built the first time it is opened, as src/main.cpp registers it.
+    app_shell::addLazy(theme_style::names().settings,
+                       settingsview::build, settingsview::destroy,
+                       settingsview::onPress, settingsview::onTurn,
+                       true, settingsview::onEnter, settingsview::onExit, false);
+    app_shell::verifySlots(nullptr, settingsview::build);
     knob::begin();
     app_shell::begin();
     psram_mark("after app_shell::begin");
@@ -219,17 +210,31 @@ extern "C" void app_main(void) {
     rtc_begin();
     rtc_seed_clock();
     clock_wind::begin();
+    chime_library::begin();   // the chime list Settings > Sound shows; heard once audio is ported
 
     // WiFi on the network the Orb already knows, then the feed. src/main.cpp joins before
     // building the apps and blocks on it; here the clock is up first and the network follows.
     orb_wifi::begin();
     flight::begin();
 
+    // src/main.cpp: a card notice, or WiFi setup, instead of the clock. Setup is owed when the
+    // Orb knows no network at all, or after an Arduino Settings > Reset. "The Orb Setup" opens
+    // as well in that case (orb_wifi), so the phone and the knob are both on offer.
+    const bool wantWifiSetup = orb_wifi::savedCount() == 0 || orb_prefs::getBool("needsWifiSetup", false);
+    if (!sdcard::mounted() || wantWifiSetup) {
+        display_idf::lock();
+        app_shell::selectApp(app_shell::APP_SETTINGS);
+        app_shell::setCaptured(true);   // Settings captures the knob on entry; match that
+        if (!sdcard::mounted()) settingsview::openNoSdCardNotice(wantWifiSetup);
+        else                    settingsview::openWifiSetupPrompt();
+        display_idf::unlock();
+    }
+
     // Core 1 with LVGL, as Arduino's loop() ran; core 0 stays free for the network.
     xTaskCreatePinnedToCore(app_loop, "app", 8192, nullptr, 5, nullptr, 1);
 
-    printf("setup done (firmware %s, ESP-IDF stage 2)\n", FW_VERSION);
-    printf("not ported yet: the setup portal and joining a new network, Headlines, Settings,\n"
-           "  weather, routes and photos, audio (ES8311), IMU and battery, idle dimming, mDNS\n"
-           "  and the web server, baking a new theme\n");
+    printf("setup done (firmware %s, ESP-IDF stage 3)\n", FW_VERSION);
+    printf("not ported yet: Headlines, setting the location, weather, routes and photos,\n"
+           "  audio (ES8311), IMU and battery, idle dimming, mDNS and the web server,\n"
+           "  factory reset, baking a new theme\n");
 }
