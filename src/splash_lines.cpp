@@ -110,6 +110,14 @@ void repaint() {
     second.y += (int)lv_font_get_line_height(splash_font(sp.credits.size)) + 4;
     one_line(sp.credits, credits[0]);
     one_line(second, credits[1]);
+#if ORB_IDF
+    // What the ESP-IDF firmware reads itself (REWRITE_PLAN.md, "Attribution on the About
+    // screen"): headlines from NRK and VG (main/news.cpp), place names from Open-Meteo's
+    // geocoder, which is GeoNames data under CC BY 4.0 (main/location.cpp).
+    theme_style::SplashText third = second;
+    third.y += (int)lv_font_get_line_height(splash_font(sp.credits.size)) + 4;
+    one_line(third, "News: NRK, VG \xC2\xB7 Places: Open-Meteo");
+#endif
     if (s_canvas) lv_obj_invalidate(s_canvas);
 }
 

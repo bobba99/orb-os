@@ -27,6 +27,10 @@ void statusTick(bool wifiUp);
 
 uint32_t lastFeedOkMs();   // millis() of the last good poll, 0 if none yet
 
+// Headlines arrived (src/intel_view.cpp fetchStep on this module's network task): true once,
+// for the UI loop to call intelview::onHeadlinesReady() with the display lock held.
+bool takeNewsReady();
+
 double homeLat();
 double homeLon();
 bool   locationSet();   // false until a position has been saved (NVS "locSet")

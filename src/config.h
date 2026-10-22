@@ -228,7 +228,11 @@ static const float RANGE_STEPS_KM[] = {10.0f, 20.0f, 30.0f, 50.0f, 100.0f};
 // ---------- Intel (headlines) ----------
 // Existing headlines/routes gateway. Aircraft positions use direct HTTPS instead.
 #define INTEL_GATEWAY_HOST  "buildtheorb.zionbrock.workers.dev"
+#if ORB_IDF   // NRK and VG, read directly (main/news.cpp); there is no gateway
+#define INTEL_SOURCE_NAME   "the news service"
+#else
 #define INTEL_SOURCE_NAME   "the Orb gateway"      // the same, for the News screen. See ADSB_SOURCE_NAME.
+#endif
 // The poll interval is theme data now (theme_style::Intel::pollMinutes, THEME_CAPS 11),
 // defaulting to the ten minutes that used to be welded here as INTEL_POLL_MS.
 // A failed poll should not leave the screen empty for the rest of the interval.

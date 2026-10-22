@@ -51,6 +51,7 @@
 #include "wind_notice.h"
 #include "radar_view.h"
 #include "settings_view.h"
+#include "intel_view.h"
 #include "chime_library.h"
 #include "ui.h"
 
@@ -129,6 +130,7 @@ static void app_loop(void *) {
         input_router::dispatch((int)kd, pressed);
         input_router::tick();
         flight::loopTick();   // new traffic to the scope, drawn only while it is on screen
+        if (flight::takeNewsReady()) intelview::onHeadlinesReady();   // labels are this core's to write
 
         // The HUD date and the scope's clock, every 5 s, as the Arduino status tick does.
         static TickType_t lastStatus = 0;
@@ -225,10 +227,12 @@ extern "C" void app_main(void) {
                    clockview::onEnter, clockview::onExit, !theme_style::apps().clock);
     app_shell::add(radarScreen, theme_style::names().flight, flight_press, flight_turn, false,
                    flight_enter, flight_exit, !theme_style::apps().flight);
-    // Headlines is not ported (stage 7). Its slot is held by an empty screen the knob never
-    // reaches, so APP_SETTINGS means Settings, as verifySlots() below checks.
-    app_shell::add(lv_obj_create(nullptr), theme_style::names().headlines, nullptr, nullptr,
-                   false, nullptr, nullptr, true);
+    // Headlines: NRK and VG (main/news.cpp), on the screen src/main.cpp registers, built the
+    // first time it is opened.
+    app_shell::addLazy(theme_style::names().headlines,
+                       intelview::build, intelview::destroy,
+                       intelview::onPress, intelview::onTurn, false,
+                       intelview::onEnter, intelview::onExit, !theme_style::apps().headlines);
     // Built the first time it is opened, as src/main.cpp registers it.
     app_shell::addLazy(theme_style::names().settings,
                        settingsview::build, settingsview::destroy,
@@ -273,7 +277,7 @@ extern "C" void app_main(void) {
     xTaskCreatePinnedToCore(app_loop, "app", 8192, nullptr, 5, nullptr, 1);
 
     printf("setup done (firmware %s, ESP-IDF stage 5)\n", FW_VERSION);
-    printf("not ported yet: Headlines, weather, photos,\n"
+    printf("not ported yet: weather, photos,\n"
            "  audio (ES8311), IMU and battery, idle dimming, mDNS and the web server,\n"
            "  factory reset\n");
 }
