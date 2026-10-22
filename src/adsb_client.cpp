@@ -6,7 +6,7 @@
 // need are kept. The nearest ADSB_MAX_AIRCRAFT contacts are retained for display.
 //
 // Two transports, one parse. The Arduino firmware streams the body through HTTPClient; pure
-// ESP-IDF (stage 2 of REWRITE_PLAN.md) fetches it whole into PSRAM through orb_http, with
+// ESP-IDF streams it through orb_net's client task (stage 4 of REWRITE_PLAN.md), with
 // certificates verified. Everything from the parsed document onwards is shared.
 #include "adsb_client.h"
 #include "config.h"
@@ -18,7 +18,7 @@
 #include <StreamUtils.h>
 #else   // pure ESP-IDF
 #include "orb_platform.h"
-#include "orb_http.h"
+#include "orb_net.h"
 #include "orb_wifi.h"
 #include <ctype.h>
 #endif
@@ -181,7 +181,11 @@ bool AdsbClient::fetchFrom(uint8_t provider, std::vector<Aircraft>& out) {
         for (const char* f : flds)
             filter[k][0][f] = true;
 
+#ifdef ARDUINO
     JsonDocument doc(&s_jsonPsram);
+#else
+    JsonDocument doc(orb_net::allocator(orb_net::App::Flight));   // PSRAM, under the app's cap
+#endif
 
 #ifdef ARDUINO
     // Keep only one TLS connection alive at a time, and release its PSRAM before
@@ -242,33 +246,28 @@ bool AdsbClient::fetchFrom(uint8_t provider, std::vector<Aircraft>& out) {
         return false;
     }
 #else   // pure ESP-IDF
-    // One request on orb_http: certificates verified against ESP-IDF's bundle, the whole
-    // body fetched into PSRAM (chunked or not; esp_http_client decodes it), then parsed.
-    orb_http::Request req;
+    // One request on orb_net's client task, parsed off the socket as it arrives.
+    struct Parse { JsonDocument *doc; JsonDocument *filter; DeserializationError err; } parse{&doc, &filter, {}};
+    orb_net::Request req;
     req.url = url;
-    req.userAgent = ADSB_USER_AGENT;
+    req.app = orb_net::App::Flight;
     req.accept = "application/json";
-    req.connectTimeoutMs = ADSB_CONNECT_MS;
-    req.readTimeoutMs = ADSB_READ_MS;
-    uint8_t *raw = nullptr;
-    size_t rawLen = 0;
-    const int code = orb_http::get(req, &raw, &rawLen);
+    req.timeoutMs = ADSB_READ_MS;
+    req.ctx = &parse;
+    req.handler = [](orb_net::Body &body, void *ctx) {
+        Parse *p = (Parse *)ctx;
+        p->err = deserializeJson(*p->doc, body, DeserializationOption::Filter(*p->filter));
+        return !p->err;
+    };
+    const int code = orb_net::fetch(req);
     _lastStatus = code;
     _providerStatus[provider] = code;
-    Serial.printf("[adsb] HTTPS %s -> %d internal_largest=%u psram_free=%u psram_largest=%u\n",
-                  host, code,
-                  (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT),
-                  (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM),
-                  (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM));
-    if (code != 200) return false;
-    DeserializationError err = deserializeJson(doc, (const char *)raw, rawLen,
-                                               DeserializationOption::Filter(filter));
-    orb_http::release(raw);
-    if (err) {
-        Serial.printf("[adsb] %s parse failed: %s; read=%u\n", host, err.c_str(), (unsigned)rawLen);
+    if (code == orb_net::ERR_BODY && parse.err) {
+        Serial.printf("[adsb] %s parse failed: %s\n", host, parse.err.c_str());
         _lastStatus = -2;
         return false;
     }
+    if (code != 200) return false;
 #endif
 
     JsonArrayConst arr = doc["ac"].as<JsonArrayConst>();

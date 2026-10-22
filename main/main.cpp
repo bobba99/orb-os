@@ -31,6 +31,7 @@
 #include "rtc_pcf85063.h"
 #include "orb_prefs.h"
 #include "orb_wifi.h"
+#include "orb_net.h"
 #include "flight.h"
 #include "host.h"
 
@@ -133,6 +134,8 @@ static void app_loop(void *) {
                                    (millis() - flight::lastFeedOkMs() < 18000UL);
             ui_set_status(wifiUp, feedFresh, orb_wifi::rssi(), clk);
             flight::statusTick(wifiUp);
+            // Settings > Location shows the centre; stored there whether or not it is built.
+            settingsview::setHomeCoords(flight::homeLat(), flight::homeLon(), flight::locationSet());
             // Once NTP has a real fix, keep it in the RTC for the next offline boot.
             static bool rtcSynced = false;
             if (!rtcSynced && orb_wifi::timeSynced() && now > 1700000000L) {
@@ -215,6 +218,7 @@ extern "C" void app_main(void) {
     // WiFi on the network the Orb already knows, then the feed. src/main.cpp joins before
     // building the apps and blocks on it; here the clock is up first and the network follows.
     orb_wifi::begin();
+    orb_net::begin();   // the one HTTPS client task; every request goes through it
     flight::begin();
 
     // src/main.cpp: a card notice, or WiFi setup, instead of the clock. Setup is owed when the
@@ -233,8 +237,8 @@ extern "C" void app_main(void) {
     // Core 1 with LVGL, as Arduino's loop() ran; core 0 stays free for the network.
     xTaskCreatePinnedToCore(app_loop, "app", 8192, nullptr, 5, nullptr, 1);
 
-    printf("setup done (firmware %s, ESP-IDF stage 3)\n", FW_VERSION);
-    printf("not ported yet: Headlines, setting the location, weather, routes and photos,\n"
+    printf("setup done (firmware %s, ESP-IDF stage 4)\n", FW_VERSION);
+    printf("not ported yet: Headlines, weather, photos,\n"
            "  audio (ES8311), IMU and battery, idle dimming, mDNS and the web server,\n"
            "  factory reset, baking a new theme\n");
 }
