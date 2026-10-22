@@ -135,6 +135,7 @@ bool decode_sd_first(const char *assetName, const uint8_t *flashPng, uint32_t fl
 
 uint16_t *s_plate = nullptr;   bool s_plateTried = false;
 uint8_t  *s_overlay = nullptr; bool s_overlayTried = false;
+theme_art::Pixels s_overlayPx;   // s_overlay with its format, for the clock's glass
 uint8_t  *s_splashOv = nullptr; bool s_splashOvTried = false;
 // 0=hour,1=minute,2=second,3=static1,4=static2 — the two statics share this exact
 // same slot/decode machinery, just always drawn at angle 0 (see clock_view.cpp).
@@ -231,8 +232,12 @@ const uint8_t *custom_overlay() {
     if (!s_overlay && !s_overlayTried) {
         s_overlayTried = true;
         int w = 0, h = 0;
-        if (const uint8_t *p = theme_art::find_active("clock_overlay.png", theme_art::FMT_RGB565_ALPHA, w, h)) {
+        // Any format: the ESP-IDF store may have baked it indexed (one colour, one level of
+        // transparency is a 1-bit blob), which the clock's glass reads through Pixels.
+        theme_art::Format fmt;
+        if (const uint8_t *p = theme_art::find_active_any("clock_overlay.png", theme_art::FMT_RGB565_ALPHA, w, h, fmt)) {
             s_overlay = (uint8_t *)p;
+            s_overlayPx.set(p, w, h, fmt);
             Serial.printf("[custom_sprite] overlay: flash-resident %dx%d (0 ms, 0 KB PSRAM)\n", w, h);
             return s_overlay;
         }
@@ -242,8 +247,13 @@ const uint8_t *custom_overlay() {
 #else
         if (decode_sd_first("clock_overlay.png", nullptr, 0, true, o, w, h, "overlay")) s_overlay = o;
 #endif
+        if (s_overlay) s_overlayPx.set(s_overlay, w, h, theme_art::FMT_RGB565_ALPHA);
     }
     return s_overlay;
+}
+
+const theme_art::Pixels *custom_overlay_px() {
+    return custom_overlay() ? &s_overlayPx : nullptr;
 }
 
 // The splash's own glass, and the reason it is not just custom_overlay().
@@ -265,7 +275,9 @@ const uint8_t *splash_overlay() {
     if (!s_splashOv && !s_splashOvTried) {
         s_splashOvTried = true;
         int w = 0, h = 0;
-        if (const uint8_t *p = theme_art::find_active("splash_overlay.png", theme_art::FMT_RGB565_ALPHA, w, h)) {
+        // Any format: splash_lines.cpp describes it through theme_art::adopt().
+        theme_art::Format fmt;
+        if (const uint8_t *p = theme_art::find_active_any("splash_overlay.png", theme_art::FMT_RGB565_ALPHA, w, h, fmt)) {
             s_splashOv = (uint8_t *)p;
             Serial.printf("[custom_sprite] splash overlay: flash-resident %dx%d (0 ms, 0 KB PSRAM)\n", w, h);
             return s_splashOv;

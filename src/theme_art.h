@@ -31,6 +31,57 @@ enum Format : uint8_t {
     // back through an lv_fs driver (theme_font.cpp), which is what lets a theme carry its
     // own typography instead of having it compiled into the firmware.
     FMT_RAW          = 2,
+    // LVGL's indexed layouts, written only by the ESP-IDF store (components/orb_ui/themeart):
+    // (1 << bpp) palette entries of 4 bytes each (B, G, R, A, LVGL's lv_color32_t), then
+    // the rows, each starting on a byte, the leftmost pixel in the high bits. The palette
+    // carries alpha, so one format covers an opaque plate with 85 colours (8 bits a pixel)
+    // and a one-colour glass with one level of transparency (1 bit a pixel). The colours are
+    // RGB565 widened by repeating their top bits, so narrowing them back is exact.
+    FMT_INDEXED1     = 3,
+    FMT_INDEXED2     = 4,
+    FMT_INDEXED4     = 5,
+    FMT_INDEXED8     = 6,
+};
+
+inline int indexed_bpp(Format f) {
+    return f == FMT_INDEXED1 ? 1 : f == FMT_INDEXED2 ? 2 : f == FMT_INDEXED4 ? 4 : f == FMT_INDEXED8 ? 8 : 0;
+}
+
+// A picture as a compositor reads it, whatever it was stored as: RGB565+A8 pixels, or an
+// indexed blob with its palette turned into RGB565 and alpha once, here, rather than per
+// pixel. For code that mixes pixels itself (the clock's glass); LVGL draws the indexed
+// formats on its own (theme_art_lv.h).
+struct Pixels {
+    Format         fmt = FMT_RGB565_ALPHA;
+    int            w = 0, h = 0;
+    const uint8_t *data = nullptr;   // RGB565+A8: the pixels. Indexed: the first row.
+    int            bpp = 0, stride = 0;
+    uint16_t       pal565[256] = {};
+    uint8_t        palA[256] = {};
+
+    bool set(const uint8_t *p, int width, int height, Format f) {
+        fmt = f; w = width; h = height; data = p; bpp = indexed_bpp(f);
+        if (!p) return false;
+        if (!bpp) return f == FMT_RGB565_ALPHA;
+        const int n = 1 << bpp;
+        for (int i = 0; i < n; ++i) {
+            const uint8_t *c = p + i * 4;   // B, G, R, A
+            pal565[i] = (uint16_t)(((c[2] & 0xF8) << 8) | ((c[1] & 0xFC) << 3) | (c[0] >> 3));
+            palA[i] = c[3];
+        }
+        data = p + n * 4;
+        stride = (w * bpp + 7) / 8;
+        return true;
+    }
+    uint8_t index_at(int x, int y) const {
+        const uint8_t *row = data + (size_t)y * stride;
+        switch (bpp) {
+            case 8:  return row[x];
+            case 4:  return (row[x >> 1] >> ((1 - (x & 1)) * 4)) & 0x0F;
+            case 2:  return (row[x >> 2] >> ((3 - (x & 3)) * 2)) & 0x03;
+            default: return (row[x >> 3] >> (7 - (x & 7))) & 0x01;
+        }
+    }
 };
 
 // Map the partition once at boot. Safe to call more than once; later calls are no-ops.
@@ -52,6 +103,14 @@ bool has(const char *slug, const char *assetName);
 // nullptr on any miss, so the caller falls through to its existing SD/PNG path. The
 // returned pointer is memory-mapped flash: never free it.
 const uint8_t *find_active(const char *assetName, Format wantFmt, int &w, int &h);
+
+// The same, for a caller that can draw an indexed blob as well as `wantFmt` (LVGL through
+// theme_art_lv.h, or a compositor through Pixels). `fmt` says which it got.
+const uint8_t *find_active_any(const char *assetName, Format wantFmt, int &w, int &h, Format &fmt);
+
+// The format of a baked blob, by the pointer lookup() handed out. False for anything else
+// (a decoded buffer in PSRAM), which a caller then describes the way it always has.
+bool format_of(const void *p, Format &fmt);
 
 // ---- install side (used by the /artput upload route) ----
 
@@ -93,6 +152,11 @@ uint32_t baked_manifest(const char *slug);
 
 // Does the cache already hold anything for this theme?
 bool slug_baked(const char *slug);
+
+// ESP-IDF store only (components/orb_ui/themeart): drop the art of every theme whose slug is
+// not among `slugs` (the themes on the card), freeing its room. Returns how many entries
+// went, or -1 if the index could not be rewritten. The caller makes sure the card is there.
+int reclaim_missing(const char *const *slugs, int n);
 
 // One-time conversion for the active theme: read each PNG off the card, unpack it once,
 // and store the raw pixels in flash. Runs at boot only when the active theme is not

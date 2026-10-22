@@ -26,7 +26,7 @@ static void heap_caps_free(void *p) { free(p); }
 #include "theme_sd.h"   // theme_sd::read_whole/free — SD-hosted plate/overlay, one rung above flash
 #include "theme_select.h"   // theme_select::activeSlug() — which /themes/<slug>/ folder to read from
 #include "theme_style.h"   // hasAsset() — ignore files the theme does not declare
-#include "theme_art.h"      // pre-baked RGB565 in flash — tried before the card, costs nothing
+#include "theme_art_lv.h"   // baked art in flash, in any format LVGL draws — tried before the card
 
 namespace {
 
@@ -108,8 +108,9 @@ bool decode_sd_first(const char *assetName, const uint8_t *flashPng, uint32_t fl
 // PNG decode, no PSRAM), and a miss falls through to exactly the previous behaviour.
 bool load_asset(const char *assetName, const uint8_t *flashPng, uint32_t flashLen,
                 bool alpha, uint8_t *&out, int &w, int &h, const char *tag) {
-    if (const uint8_t *p = theme_art::find_active(
-            assetName, alpha ? theme_art::FMT_RGB565_ALPHA : theme_art::FMT_RGB565, w, h)) {
+    theme_art::Format fmt;   // any format: the description is put right by theme_art::adopt()
+    if (const uint8_t *p = theme_art::find_active_any(
+            assetName, alpha ? theme_art::FMT_RGB565_ALPHA : theme_art::FMT_RGB565, w, h, fmt)) {
         out = (uint8_t *)p;
         Serial.printf("[settings_sprite] %s: flash-resident %dx%d (0 ms, 0 KB PSRAM)\n", tag, w, h);
         return true;
@@ -138,6 +139,7 @@ const lv_img_dsc_t *settings_custom_plate() {
             s_plateDsc.header.cf = LV_IMG_CF_TRUE_COLOR;
             s_plateDsc.data_size = (uint32_t)w * h * 2;
             s_plateDsc.data = s_plateBuf;
+            theme_art::adopt(s_plateDsc);
         }
     }
     if (s_plateBuf) return &s_plateDsc;
@@ -160,6 +162,7 @@ const lv_img_dsc_t *settings_custom_overlay() {
             s_overlayDsc.header.cf = LV_IMG_CF_TRUE_COLOR_ALPHA;
             s_overlayDsc.data_size = (uint32_t)w * h * 3;
             s_overlayDsc.data = s_overlayBuf;
+            theme_art::adopt(s_overlayDsc);
         }
     }
     if (s_overlayBuf) return &s_overlayDsc;

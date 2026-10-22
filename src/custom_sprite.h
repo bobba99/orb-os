@@ -2,6 +2,7 @@
 // custom_plate.h / custom_overlay.h / custom_hands.h) once into PSRAM buffers the
 // FACE_CUSTOM compositor blits/rotates. See custom_sprite.cpp.
 #pragma once
+#include "theme_art.h"   // theme_art::Pixels
 #include <stdint.h>
 
 struct CustomSprite { const uint8_t *data; int w, h; };  // RGB565+alpha, 3 bytes/px (lo,hi,alpha)
@@ -12,7 +13,10 @@ const uint16_t *custom_plate();     // 466x466 RGB565 opaque background, or null
 // Frames 1..n come from clock_plate_01.png upward, flash first like everything else.
 // nullptr when the theme ships no such frame, which is the answer for every older theme.
 const uint16_t *custom_plate_frame(int index);
-const uint8_t  *custom_overlay();   // 466x466 RGB565+alpha (3 B/px) over-hands layer, or nullptr
+const uint8_t  *custom_overlay();   // 466x466 over-hands layer (RGB565+alpha, or indexed when baked so), or nullptr
+// The same layer as a compositor reads it: custom_overlay()'s pixels with their format.
+// nullptr exactly when custom_overlay() is.
+const theme_art::Pixels *custom_overlay_px();
 // The SPLASH's glass. Deliberately a different file from custom_overlay(): that one is the
 // clock's, and Studio bakes the hand-pivot hub into it. See the note on the definition.
 const uint8_t  *splash_overlay();   // 466x466 RGB565+alpha, or nullptr if the theme ships none

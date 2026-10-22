@@ -1611,6 +1611,41 @@ static float minute_hand_mins(bool railway, int min, int sec) {
     return railway ? (float)min : (float)min + (float)sec / 60.0f;
 }
 
+// The glass over one row of the dial, x0..x1 inclusive. The three places that lay the glass
+// all come here, so a format the store learns is learnt once. RGB565+A8 is the original loop
+// unchanged; an indexed glass (the ESP-IDF store bakes a one-colour glass as a 1-bit blob)
+// reads its palette, already in RGB565, and skips the clear pixels just the same.
+static inline void glass_row(const theme_art::Pixels &g, int y, int x0, int x1) {
+    lv_color_t *row = s_buf + y * SCREEN_W;
+    if (g.fmt == theme_art::FMT_RGB565_ALPHA) {
+        const uint8_t *o = g.data + (size_t)y * SCREEN_W * 3;
+        for (int x = x0; x <= x1; ++x) {
+            const uint8_t a = o[x * 3 + 2];
+            if (!a) continue;
+            lv_color_t sc; sc.full = (uint16_t)(o[x * 3] | (o[x * 3 + 1] << 8));
+            row[x] = lv_color_mix(sc, row[x], a);
+        }
+        return;
+    }
+    // The bit depth is settled once per row, not looked up per pixel.
+    const uint8_t *src = g.data + (size_t)y * g.stride;
+    auto mix = [&](auto index_of) {
+        for (int x = x0; x <= x1; ++x) {
+            const uint8_t k = index_of(x);
+            const uint8_t a = g.palA[k];
+            if (!a) continue;
+            lv_color_t sc; sc.full = g.pal565[k];
+            row[x] = lv_color_mix(sc, row[x], a);
+        }
+    };
+    switch (g.bpp) {
+        case 1:  mix([src](int x) { return (uint8_t)((src[x >> 3] >> (7 - (x & 7))) & 1); }); break;
+        case 2:  mix([src](int x) { return (uint8_t)((src[x >> 2] >> ((3 - (x & 3)) * 2)) & 3); }); break;
+        case 4:  mix([src](int x) { return (uint8_t)((src[x >> 1] >> ((1 - (x & 1)) * 4)) & 15); }); break;
+        default: mix([src](int x) { return src[x]; }); break;
+    }
+}
+
 // overlay has to go back on TOP of the second hand and so cannot be baked into that cache.
 // `stopKind` is the hand this compose stops BELOW: that hand, and everything above it in the
 // draw order, is left out and redrawn later by whoever owns the cache being built.
@@ -1630,7 +1665,7 @@ static void compose_custom(const struct tm *ti, int stopKind, bool withOverlay) 
     // animation or its frames never baked. Both answers are the same pointer for frame 0.
     const uint16_t *plate = custom_plate_frame(s_bgFrame);
     if (!plate) plate = custom_plate();
-    const uint8_t *overlay = custom_overlay();
+    const theme_art::Pixels *overlay = custom_overlay_px();
     // Angles are needed before the plate now: a theme can ask the plate to rotate with a
     // hand, in which case the straight copy below becomes a rotated one.
     const float p_sec = ti->tm_sec, p_min = ti->tm_min + p_sec / 60.0f;
@@ -1802,16 +1837,7 @@ static void compose_custom(const struct tm *ti, int stopKind, bool withOverlay) 
     // Row by row and inside the clip, so a sweeping hand pays for its own box rather than
     // all 217,156 pixels. Full screen this is 26 ms, the second largest cost on the dial.
     if (overlay && withOverlay) {
-        for (int dy = s_clipY0; dy <= s_clipY1; ++dy) {
-            const int base = dy * SCREEN_W;
-            for (int dx = s_clipX0; dx <= s_clipX1; ++dx) {
-                const int i = base + dx;
-                const uint8_t a = overlay[i * 3 + 2];
-                if (!a) continue;
-                lv_color_t sc; sc.full = (uint16_t)(overlay[i * 3] | (overlay[i * 3 + 1] << 8));
-                s_buf[i] = lv_color_mix(sc, s_buf[i], a);
-            }
-        }
+        for (int dy = s_clipY0; dy <= s_clipY1; ++dy) glass_row(*overlay, dy, s_clipX0, s_clipX1);
     }
 }
 
@@ -2645,17 +2671,10 @@ static bool refresh_minute(const struct tm *ti, float ang) {
     // design with no glass nothing showed at all, which is why it reached a stranger's Orb.
     //
     // It is the same loop sweep_frame ends with, over the rows this one wiped.
-    if (const uint8_t *overlay = custom_overlay()) {
+    if (const theme_art::Pixels *overlay = custom_overlay_px()) {
         for (int y = box.y1; y <= box.y2; ++y) {
             if (runHi[y] < runLo[y]) continue;
-            const int base = y * SCREEN_W;
-            for (int x = runLo[y]; x <= runHi[y]; ++x) {
-                const int i = base + x;
-                const uint8_t a = overlay[i * 3 + 2];
-                if (!a) continue;
-                lv_color_t sc; sc.full = (uint16_t)(overlay[i * 3] | (overlay[i * 3 + 1] << 8));
-                s_buf[i] = lv_color_mix(sc, s_buf[i], a);
-            }
+            glass_row(*overlay, y, runLo[y], runHi[y]);
         }
     }
     clip_reset();
@@ -2814,20 +2833,13 @@ static void sweep_frame(float secs) {
             }
         }
     }
-    if (const uint8_t *overlay = custom_overlay()) {
+    if (const theme_art::Pixels *overlay = custom_overlay_px()) {
         for (int dy = s_clipY0; dy <= s_clipY1; ++dy) {
-            const int base = dy * SCREEN_W;
             // Exactly the pixels that were restored. Glassing anything else would be
             // re-mixing the overlay onto a pixel that already has it.
             int gx0 = s_clipX0, gx1 = s_clipX1;
             clip_row(dy, gx0, gx1);
-            for (int dx = gx0; dx <= gx1; ++dx) {
-                const int i = base + dx;
-                const uint8_t a = overlay[i * 3 + 2];
-                if (!a) continue;
-                lv_color_t sc; sc.full = (uint16_t)(overlay[i * 3] | (overlay[i * 3 + 1] << 8));
-                s_buf[i] = lv_color_mix(sc, s_buf[i], a);
-            }
+            glass_row(*overlay, dy, gx0, gx1);
         }
     }
     clip_reset();

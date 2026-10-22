@@ -15,7 +15,7 @@ set(SHARED
     clock_view.cpp clock_wind.cpp wind_notice.cpp adsb_client.cpp
     radar_view.cpp ui.cpp radar_sprite.cpp coastline.cpp airports.cpp roads_sd.cpp
     route.cpp photo.cpp weather.cpp wx_radar.cpp cloud_image.cpp intel.cpp
-    theme_style.cpp theme_select.cpp theme_sd.cpp theme_art.cpp theme_font.cpp theme_audio.cpp
+    theme_style.cpp theme_select.cpp theme_sd.cpp  theme_font.cpp theme_audio.cpp
     custom_sprite.cpp plate_sprite.cpp office_sprite.cpp menu_sprite.cpp menu_text.cpp
     splash_art.cpp splash_lines.cpp curved_text.cpp text_tokens.cpp
     settings_view.cpp settings_sprite.cpp settings_text.cpp chime_library.cpp
@@ -24,6 +24,9 @@ set(SHARED
     custom_menu_font1.c custom_menu_font2.c custom_menu_font3.c
     font_inter_12.c font_inter_14.c font_inter_16.c font_inter_18.c font_inter_20.c)
 list(TRANSFORM SHARED PREPEND "${ORB_SRC}/")
+# The theme art store and its baker for ESP-IDF (stage 5). src/theme_art.cpp is the Arduino
+# firmware's store, with a different on-flash layout, and is not compiled here.
+list(APPEND SHARED "${CMAKE_CURRENT_LIST_DIR}/themeart/store.cpp" "${CMAKE_CURRENT_LIST_DIR}/themeart/bake.cpp")
 idf_component_register(SRCS ${SHARED}
                        REQUIRES orb_shared lvgl
                        PRIV_REQUIRES pngdec orb_prefs orb_sdcard orb_audio orb_net orb_wifi esp_timer

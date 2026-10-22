@@ -50,7 +50,7 @@ place of their own.
 | WiFi: several saved networks, fallback, backoff, "The Orb Setup", joining with the knob; NTP; the aircraft feed over verified HTTPS | Forgetting a network from the screen |
 | One HTTPS client task (`orb_net`): the feed, flight routes, Settings > Location (search, recents, IP lookup) | Settings > Reset erases nothing (stage 10) |
 | | Audio (a stub reporting no codec), IMU, battery, idle dimming |
-| Baked theme art and fonts, read from the themeart partition | Baking: a theme installed or changed is not re-baked yet |
+| Theme art and fonts baked into the themeart partition at boot (stage 5 store: shared blobs, indexed formats, reclaiming) | Skipping the round screen's invisible corners |
 
 ### Boot to the bring-up page
 
