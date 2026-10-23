@@ -54,9 +54,12 @@
 #include "intel_view.h"
 #include "yr_view.h"
 #include "chime_library.h"
+#include "audio.h"
 #include "ui.h"
 
 static const char *TAG = "orb";
+
+extern bool host_sound_chime();   // host.cpp: Settings > Sound > Clock chime
 
 void bringup_run();   // bringup.cpp
 
@@ -153,6 +156,18 @@ static void app_loop(void *) {
             const bool feedFresh = wifiUp && flight::lastFeedOkMs() &&
                                    (millis() - flight::lastFeedOkMs() < 18000UL);
             ui_set_status(wifiUp, feedFresh, orb_wifi::rssi(), clk);
+            // src/main.cpp: the hour's chime, once per change of hour (not at boot), and only
+            // while the clock is on screen, where a chime belongs.
+            static int lastChimeHour = -1;
+            if (now > 1700000000L) {
+                localtime_r(&now, &ti);
+                if (lastChimeHour < 0) lastChimeHour = ti.tm_hour;
+                else if (ti.tm_hour != lastChimeHour) {
+                    lastChimeHour = ti.tm_hour;
+                    const bool onClock = !app_shell::browsing() && app_shell::index() == app_shell::APP_CLOCK;
+                    if (host_sound_chime() && onClock && audio_present()) chime_library::playSelected();
+                }
+            }
             flight::statusTick(wifiUp);
             // Settings > Location shows the centre; stored there whether or not it is built.
             settingsview::setHomeCoords(flight::homeLat(), flight::homeLon(), flight::locationSet());
@@ -255,7 +270,8 @@ extern "C" void app_main(void) {
     rtc_begin();
     rtc_seed_clock();
     clock_wind::begin();
-    chime_library::begin();   // the chime list Settings > Sound shows; heard once audio is ported
+    chime_library::begin();   // every chime on the card, and which one was chosen
+    audio_begin();            // the ES8311 and the speaker; levels were set by host::loadSettings()
 
     // WiFi on the network the Orb already knows, then the feed. src/main.cpp joins before
     // building the apps and blocks on it; here the clock is up first and the network follows.
@@ -285,6 +301,6 @@ extern "C" void app_main(void) {
 
     printf("setup done (firmware %s, ESP-IDF stage 8)\n", FW_VERSION);
     printf("not ported yet: photos,\n"
-           "  audio (ES8311), IMU and battery, idle dimming, mDNS and the web server,\n"
+           "  IMU and battery, idle dimming, mDNS and the web server,\n"
            "  factory reset\n");
 }
