@@ -272,6 +272,22 @@ Heard on the Orb: the volume beep and the Westminster chime preview, from the sp
 
 Not done: streaming radio (decoder, stations, ring buffer), the rest of the plan's stage 9.
 
+## A slimmer image: the unreachable clock faces (2026-10-23)
+
+The stock Imperial and Aviator clock faces (two full-screen dials as raw pixels, 424 KB each, and
+the Aviator's hand and shadow sprites) are left out of the ESP-IDF build (`ORB_STOCK_FACES` in
+`src/clock_view.cpp`). A Launch Kit design is compiled in (`CUSTOM_CLOCK.active`), which forces
+the theme's face, and the clock has no press to cycle faces, so neither could be reached; a face
+that is not compiled in falls back to the theme's. The Aviator's four hidden hand objects are no
+longer created at boot either. Arduino is unchanged.
+
+The ESP-IDF image went from 5.64 MB to 4.69 MB (25% of the app partition free), which is room
+stage 10's two OTA slots need. Seen on the Orb: the clock exactly as before.
+
+Measured and left for later, should stage 10 need more: the coastline table delta-coded (1.15 MB
+to about 0.59 MB, the same points) and the Westminster chime stored once as mono (its two channels
+are identical in 99.8% of samples; 438 KB to 219 KB).
+
 ## The toolchain: `idf.py`, ESP-IDF v5.5.6
 
 `idf.py` rather than PlatformIO's `framework = espidf`, for two reasons:

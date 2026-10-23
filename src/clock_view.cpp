@@ -82,12 +82,26 @@ static void time_for_face(struct tm *ti) {
     ti->tm_hour = 0; ti->tm_min = 0;   // tm_sec keeps running from the system clock
     s_noTime = true;
 }
+// THE STOCK IMPERIAL AND AVIATOR FACES, and only on the Arduino firmware.
+//
+// They predate themes: two full-screen dials as raw pixels (424 KB each) and the Aviator's
+// hand sprites, about 970 KB of the image. A Launch Kit design is compiled in
+// (CUSTOM_CLOCK.active), which forces FACE_CUSTOM, and the clock has no press to cycle faces,
+// so neither can be reached. The ESP-IDF build leaves them out, which is room stage 10's two OTA
+// slots need; if a face that is not compiled in is ever chosen, FACE_CUSTOM is drawn instead.
+#if ORB_IDF
+#define ORB_STOCK_FACES 0
+#else
+#define ORB_STOCK_FACES 1
+#endif
+#if ORB_STOCK_FACES
 #include "dial_img.h"      // DIAL_IMG  — Imperial Signal (blue)
 #include "dial_avi.h"      // DIAL_AVI  — Aviator (cream), AVI_SUB_X/Y sub-dial centre
 #include "hand_hour_img.h" // HAND_HOUR_IMG — owner's real hour hand (trefoil tip), rotated at runtime
 #include "hand_min_img.h"  // HAND_MIN_IMG  — owner's real minute hand (lance tip), rotated at runtime
 #include "hand_hour_shadow_img.h" // HAND_HOUR_SHADOW_IMG — pre-blurred black silhouette of the hour hand
 #include "hand_min_shadow_img.h"  // HAND_MIN_SHADOW_IMG  — pre-blurred black silhouette of the minute hand
+#endif
 #include "custom_clock.h"   // CUSTOM_CLOCK — text banners + fallback bg for the pushed design
 #include "custom_hands.h"   // CUSTOM_HAS_* / CUSTOM_*_PIVOT_* / CUSTOM_*_BLEND / CUSTOM_HAND_ORDER
 #include "custom_text.h"    // CUSTOM_HAS_TEXT* (compile-time show/hide gate) / CUSTOM_TEXT*_FONT (compiled glyphs, not per-theme — see theme_style.h)
@@ -134,7 +148,7 @@ static constexpr float AVI_DATE_STEP = 4.0f;    // degrees between characters
 // so the sim always displays exactly the design that was pushed.
 enum Face { FACE_AVIATOR, FACE_IMPERIAL, FACE_DIGITAL, FACE_OFFICE, FACE_CUSTOM, FACE_COUNT };
 
-static Face        s_face   = FACE_AVIATOR;   // WWII aviator is the default face
+static Face        s_face   = ORB_STOCK_FACES ? FACE_AVIATOR : FACE_CUSTOM;   // WWII aviator is the default face, where it is compiled
 static lv_obj_t   *s_screen = nullptr;
 static lv_obj_t   *s_canvas = nullptr;
 static lv_color_t *s_buf    = nullptr;
@@ -220,6 +234,7 @@ static void draw_needle_at(float pxc, float pyc, float angDeg, float len, float 
     lv_canvas_draw_line(s_canvas, sp, 2, &ld);
 }
 
+#if ORB_STOCK_FACES
 // ---- IMPERIAL face ----------------------------------------------------------
 static void draw_imperial(const struct tm *ti) {
     memcpy(s_buf, DIAL_IMG, sizeof(DIAL_IMG));
@@ -319,6 +334,7 @@ static void draw_aviator(const struct tm *ti) {
         lv_obj_move_foreground(s_minImg);
     }
 }
+#endif  // ORB_STOCK_FACES
 
 // ---- DIGITAL face (seven-segment) -------------------------------------------
 // segment bits: a=0x01 b=0x02 c=0x04 d=0x08 e=0x10 f=0x20 g=0x40
@@ -2887,8 +2903,13 @@ static void sweep_pad_for_shadow() {
 static void redraw(const struct tm *ti) {
     if (!s_canvas || !s_buf) return;
     switch (s_face) {
+#if ORB_STOCK_FACES
         case FACE_IMPERIAL: draw_imperial(ti); break;
         case FACE_AVIATOR:  draw_aviator(ti);  break;
+#else
+        case FACE_IMPERIAL:
+        case FACE_AVIATOR:  draw_custom(ti);   break;   // not compiled in; see ORB_STOCK_FACES
+#endif
         case FACE_OFFICE:   draw_office(ti);   break;
         case FACE_CUSTOM:   draw_custom(ti);   break;
         default:            draw_digital(ti);  break;
@@ -3812,6 +3833,7 @@ void clockview::init() {
     // regardless, and the difference is that it is released the moment you leave.
     (void)office;
 
+#if ORB_STOCK_FACES   // the Aviator face's hands: not created where the face is not compiled
     // Drop shadows: pre-blurred black silhouettes of the hand sprites (see
     // hand_hour_shadow_img.h / hand_min_shadow_img.h — soft gaussian-blurred alpha edges,
     // baked offline so there's no runtime blur cost), offset by a fixed screen-space vector
@@ -3854,6 +3876,7 @@ void clockview::init() {
     lv_obj_set_pos(s_minImg, (lv_coord_t)lroundf(CX) - HAND_MIN_IMG_PIVOT_X,
                              (lv_coord_t)lroundf(CY) - HAND_MIN_IMG_PIVOT_Y);
     lv_obj_add_flag(s_minImg, LV_OBJ_FLAG_HIDDEN);
+#endif
 
     // OFFICE minute hand + rim glow sprite is pre-decoded here (once) so the first Office
     // redraw doesn't pay the PNG-decode cost — see draw_office_minute_sprite().
