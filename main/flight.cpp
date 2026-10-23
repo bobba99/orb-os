@@ -28,6 +28,12 @@
 #include "display_idf.h"
 #include "orb_prefs.h"
 #include "orb_wifi.h"
+#include "audio.h"
+#include "geo.h"
+
+#include <set>
+
+bool host_sound_radar();   // host.cpp: Settings > Sound > Radar sounds
 #include "location.h"
 #include "routes.h"
 #include "intel_view.h"
@@ -38,6 +44,7 @@ namespace {
 RadarSettings s_settings = {HOME_LAT_DEFAULT, HOME_LON_DEFAULT, RANGE_KM_DEFAULT};
 bool  s_locationSet = false;
 float s_proximityKm = 0.0f;
+int   s_alertMode = 2;   // 0 off, 1 emergencies, 2 new aircraft and emergencies (NVS "alertmode")
 int   s_deadZonePx = 0;
 
 AdsbClient s_adsb;
@@ -168,6 +175,40 @@ void net_task(void *) {
     }
 }
 
+// src/app_hooks.cpp checkAudioEvents(), unchanged in what it decides: on each new snapshot,
+// a ping for an aircraft newly in range (no more than one in three seconds), a double ping for
+// an emergency squawk or a military contact, and one for anything crossing into the proximity
+// radius. Settings > Sound's "Radar sounds" switches them all (host_sound_radar, host.cpp).
+void check_audio_events() {
+    if (!audio_present() || !host_sound_radar()) return;
+    static std::set<std::string> seen, seenProx;
+    static bool first = true;
+    static uint32_t lastNew = 0;
+    std::set<std::string> now, nowProx;
+    for (const Aircraft &ac : s_snap) {
+        const double d = geo::haversineKm(s_settings.homeLat, s_settings.homeLon, ac.lat, ac.lon);
+        if (d > s_settings.rangeKm) continue;
+        const std::string hex = ac.hex.c_str();
+        now.insert(hex);
+        const bool isNew = !first && !seen.count(hex);
+        const bool emergency = acIsEmergency(ac.squawk) || ac.military;
+        if (s_proximityKm > 0.0f && d <= s_proximityKm) {
+            nowProx.insert(hex);
+            if (!first && !seenProx.count(hex)) audio_play(AUDIO_ALERT);
+        }
+        if (isNew) {
+            if (emergency) { if (s_alertMode >= 1) audio_play(AUDIO_ALERT); }
+            else if (s_alertMode >= 2 && millis() - lastNew > 3000) {
+                audio_play(AUDIO_NEW);
+                lastNew = millis();
+            }
+        }
+    }
+    seen.swap(now);
+    seenProx.swap(nowProx);
+    first = false;
+}
+
 }  // namespace
 
 void flight::applySettings() {
@@ -178,6 +219,7 @@ void flight::applySettings() {
     s_locationSet      = orb_prefs::getBool("locSet", orb_prefs::isKey("homeLat"));
     s_settings.rangeKm = orb_prefs::getFloat("rangeKm", RANGE_KM_DEFAULT);
     s_proximityKm      = orb_prefs::getFloat("proxkm", 0.0f);
+    s_alertMode        = (int)orb_prefs::getInt("alertmode", 2);
     int maxAc          = (int)orb_prefs::getInt("maxac", 12);
     const int trailLen = (int)orb_prefs::getInt("traillen", 2);
     const int units    = (int)orb_prefs::getInt("units", 0);
@@ -267,6 +309,7 @@ void flight::loopTick() {
         s_snap.swap(s_aircraft);
         s_dirty = false;
         xSemaphoreGive(s_mutex);
+        check_audio_events();   // any screen, as on Arduino
         if (s_visible) {
             radar::update(s_snap, s_settings);
             ui_on_data_updated();

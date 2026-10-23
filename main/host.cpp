@@ -62,6 +62,7 @@ void host::loadSettings() {
     audio_set_volume(s_volume);
     audio_set_tick_level(s_tickVol);
     audio_set_chime_level(s_chimeVol);
+    audio_set_muted(orb_prefs::getBool("mute", false));   // src/storage.cpp's key
 }
 
 int host::brightness() { return s_brightness; }

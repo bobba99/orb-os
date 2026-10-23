@@ -49,7 +49,7 @@ place of their own.
 | Clock, Flight Tracker, Headlines (NRK and VG), Weather (MET Norway) and Settings apps, theme, splash | The web server |
 | WiFi: several saved networks, fallback, backoff, "The Orb Setup", joining with the knob; NTP; the aircraft feed over verified HTTPS | Forgetting a network from the screen |
 | One HTTPS client task (`orb_net`): the feed, flight routes, Settings > Location (search, recents, IP lookup) | Settings > Reset erases nothing (stage 10) |
-| | Audio (a stub reporting no codec), IMU, battery, idle dimming |
+| Audio: ES8311 and the speaker (beeps, alerts, the hour's chime, theme sounds) | IMU, battery, idle dimming; internet radio (stage 9) |
 | Theme art and fonts baked into the themeart partition at boot (stage 5 store: shared blobs, indexed formats, reclaiming) | Skipping the round screen's invisible corners |
 
 ### Boot to the bring-up page
@@ -249,6 +249,28 @@ time, so after stage 6 "ø" drew as "Ã¸" in themed text. They decode UTF-8 now
 
 Seen on the Orb: a live forecast (35 KB, 0.6 s), now, the hours and the days on the wheel, a
 press back to now, the MET credit on About.
+
+## Stage 9, first part: audio (2026-10-23)
+
+The plan's stage 9 is internet radio and optional. Its first step, the speaker itself, is done
+on its own: `components/orb_audio` is no longer a stub.
+
+- `audio.cpp` ports src/audio.cpp: the same ES8311 register sequence (Espressif's
+  esp_codec_dev for this board), the same cues, interruption by a newer request, volume curves,
+  and the hour's chime that nothing cuts short. Underneath: `orb_i2c`, the current `i2s_std`
+  driver (16 kHz, 16-bit stereo, MCLK 256 fs), the amplifier pin (46) on only while sounding.
+- The codec's analog supply, AXP2101 ALDO1 at 3.3 V, is switched on by `audio_begin()`, which
+  writes only that rail's enable bit and voltage field. On the Orb it was already on.
+- Wired: the saved volume, levels and mute (`host.cpp`); the hour's chime while the clock is on
+  screen (`main.cpp`, as src/main.cpp); new-aircraft, emergency and proximity alerts on each new
+  snapshot (`flight.cpp`, src/app_hooks.cpp's rules); the clock's ticks and the winding sounds,
+  which already called the real interface.
+- Cost: the recorded Westminster chime is 448 KB of flash. The ESP-IDF image is 5.64 MB of the
+  6.4 MB app partition (10% free), which stage 10's OTA layout has to plan for.
+
+Heard on the Orb: the volume beep and the Westminster chime preview, from the speaker.
+
+Not done: streaming radio (decoder, stations, ring buffer), the rest of the plan's stage 9.
 
 ## The toolchain: `idf.py`, ESP-IDF v5.5.6
 
